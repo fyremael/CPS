@@ -109,7 +109,7 @@ jobs:
           python scripts/validate_notebooks.py
           python -m compileall -q src scripts tests
           python -m pip install -q pytest numpy scipy matplotlib pyyaml
-          pytest -q tests/test_notebook_bootstrap.py tests/test_spectra.py
+          PYTHONPATH=src pytest -q tests/test_notebook_bootstrap.py tests/test_spectra.py
 
       - name: Remove temporary workflow and commit
         run: |
