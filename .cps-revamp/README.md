@@ -1,0 +1,1 @@
+Temporary verified transfer scaffold. The apply workflow removes this directory before the implementation commit.
