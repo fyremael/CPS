@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import OrderedDict
 import platform
 import time
 from pathlib import Path
@@ -15,7 +16,7 @@ from .config import PythiaProbeConfig
 from .data import build_batch
 from .functional_adamw import AdamWHyperparameters, FunctionalAdamWProbe
 from .jvp import build_jvp
-from .native_state import reconstruct_zero_adam_state
+from .native_state import parameter_reference_signatures, reconstruct_zero_adam_state
 from .reduced_operator import project_jacobian
 from .registry import get_run_spec
 
@@ -153,9 +154,20 @@ def run_probe(
         if config.state.native_checkpoint_dir is None:
             raise ValueError("native_checkpoint_dir is required for moment_source=native")
         reporter.info(f"Reading ZeRO-partitioned state from {config.state.native_checkpoint_dir}")
+        reporter.info(
+            "Preparing the full ordered model-shape contract. Historical GPT-NeoX packets may "
+            "omit param_shapes; CPS will use this contract only after validating it against the "
+            "native fp32 master-weight partitions."
+        )
+        ordered_shapes = OrderedDict(
+            (name, tuple(parameter.shape)) for name, parameter in model.named_parameters()
+        )
+        signatures = parameter_reference_signatures(all_named)
         native = reconstruct_zero_adam_state(
             config.state.native_checkpoint_dir,
             parameter_names=selected_names,
+            parameter_shapes=ordered_shapes,
+            reference_signatures=signatures,
         )
         initial_m = _align_native_names(native.exp_avg, selected_names)
         initial_v = _align_native_names(native.exp_avg_sq, selected_names)
@@ -164,10 +176,18 @@ def run_probe(
                 "partition_count": native.partition_count,
                 "source_files": list(native.source_files),
                 "parameter_count": native.parameter_count,
+                "shape_source": native.shape_source,
+                "shape_validation": native.shape_validation,
             }
         )
         reporter.metric("ZeRO partitions", native.partition_count)
         reporter.metric("reconstructed moment parameters", native.parameter_count)
+        reporter.metric("native shape source", native.shape_source)
+        if native.shape_validation.get("match_fraction") is not None:
+            reporter.metric(
+                "native order signature match",
+                f"{native.shape_validation['match_fraction']:.1%}",
+            )
     elif config.state.moment_source not in {"reconstructed", "zero"}:
         raise ValueError(f"unsupported moment_source: {config.state.moment_source}")
     else:

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import math
 import sys
 import types
 from collections import OrderedDict
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 
 
 @dataclass(frozen=True)
@@ -15,6 +16,8 @@ class NativeAdamState:
     source_files: tuple[str, ...]
     partition_count: int
     parameter_count: int
+    shape_source: str = "checkpoint_param_shapes"
+    shape_validation: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -91,17 +94,6 @@ def discover_native_checkpoint(path: str | Path) -> NativeCheckpointSummary:
     )
 
 
-def _walk(value: Any, path: tuple[str, ...] = ()) -> Iterable[tuple[tuple[str, ...], Any]]:
-    if isinstance(value, Mapping):
-        for key, child in value.items():
-            yield from _walk(child, (*path, str(key)))
-    elif isinstance(value, (list, tuple)):
-        for index, child in enumerate(value):
-            yield from _walk(child, (*path, str(index)))
-    else:
-        yield path, value
-
-
 def _moment_tensors(payload: Mapping[str, Any], key: str) -> list[Any]:
     import torch
 
@@ -122,7 +114,29 @@ def _moment_tensors(payload: Mapping[str, Any], key: str) -> list[Any]:
     return [tensor for _, tensor in output]
 
 
-def _find_param_shapes(payloads: Iterable[Mapping[str, Any]]) -> list[OrderedDict[str, tuple[int, ...]]]:
+def _coerce_param_shapes(value: Any) -> list[OrderedDict[str, tuple[int, ...]]] | None:
+    if isinstance(value, Mapping):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        return None
+    groups: list[OrderedDict[str, tuple[int, ...]]] = []
+    for group in value:
+        if not isinstance(group, Mapping):
+            continue
+        converted: OrderedDict[str, tuple[int, ...]] = OrderedDict()
+        for name, shape in group.items():
+            try:
+                converted[str(name)] = tuple(int(x) for x in shape)
+            except TypeError:
+                return None
+        if converted:
+            groups.append(converted)
+    return groups or None
+
+
+def _find_param_shapes(
+    payloads: Iterable[Mapping[str, Any]],
+) -> list[OrderedDict[str, tuple[int, ...]]] | None:
     def search(value: Any) -> Any:
         if isinstance(value, Mapping):
             if "param_shapes" in value:
@@ -139,33 +153,184 @@ def _find_param_shapes(payloads: Iterable[Mapping[str, Any]]) -> list[OrderedDic
         return None
 
     for payload in payloads:
-        value = search(payload)
-        if isinstance(value, (list, tuple)):
-            groups: list[OrderedDict[str, tuple[int, ...]]] = []
-            for group in value:
-                if isinstance(group, Mapping):
-                    groups.append(
-                        OrderedDict(
-                            (str(name), tuple(int(x) for x in shape))
-                            for name, shape in group.items()
-                        )
-                    )
-            if groups:
-                return groups
-    raise KeyError("could not find param_shapes in model checkpoint metadata")
+        groups = _coerce_param_shapes(search(payload))
+        if groups:
+            return groups
+    return None
+
+
+def _flat_partition_groups(payload: Mapping[str, Any]) -> tuple[str, list[Any]] | None:
+    """Find fp32 master-weight partitions stored by ZeRO-1/2/3 variants."""
+
+    import torch
+
+    candidates = (
+        "single_partition_of_fp32_groups",
+        "fp32_flat_groups",
+        "single_partition_of_fp32_groups_flat",
+    )
+
+    def search(value: Any) -> tuple[str, list[Any]] | None:
+        if isinstance(value, Mapping):
+            for key in candidates:
+                candidate = value.get(key)
+                if torch.is_tensor(candidate):
+                    return key, [candidate.detach().cpu().reshape(-1)]
+                if isinstance(candidate, (list, tuple)) and candidate and all(
+                    torch.is_tensor(item) for item in candidate
+                ):
+                    return key, [item.detach().cpu().reshape(-1) for item in candidate]
+            for child in value.values():
+                found = search(child)
+                if found is not None:
+                    return found
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                found = search(child)
+                if found is not None:
+                    return found
+        return None
+
+    return search(payload)
+
+
+def _caller_shape_groups(
+    parameter_shapes: Mapping[str, Sequence[int]] | Sequence[Mapping[str, Sequence[int]]] | None,
+) -> list[OrderedDict[str, tuple[int, ...]]] | None:
+    if parameter_shapes is None:
+        return None
+    return _coerce_param_shapes(parameter_shapes)
+
+
+def _relative_error(observed: float, expected: float) -> float:
+    scale = max(abs(expected), 1.0e-12)
+    return abs(observed - expected) / scale
+
+
+def _validate_caller_order(
+    optimizer_payloads: list[Mapping[str, Any]],
+    param_groups: list[OrderedDict[str, tuple[int, ...]]],
+    reference_signatures: Mapping[str, Mapping[str, float]] | None,
+    *,
+    signature_rtol: float,
+    minimum_match_fraction: float,
+) -> dict[str, Any]:
+    """Validate caller-supplied parameter order against native fp32 master weights.
+
+    Some historical GPT-NeoX pipeline metadata omits ``param_shapes``. In that
+    case the Transformers model supplies candidate names and shapes. CPS accepts
+    that order only when tensorwise L2 and L1 signatures of the reconstructed
+    fp32 master weights agree with the loaded checkpoint. Permutations and
+    transposes used during format conversion preserve these signatures.
+    """
+
+    import torch
+
+    if reference_signatures is None:
+        raise KeyError(
+            "native checkpoint metadata does not contain param_shapes, and no model-reference "
+            "signatures were supplied to validate a caller-provided parameter order"
+        )
+
+    extracted = [_flat_partition_groups(payload) for payload in optimizer_payloads]
+    if any(item is None for item in extracted):
+        raise KeyError(
+            "native checkpoint metadata does not contain param_shapes and the optimizer shards "
+            "do not expose fp32 master-weight partitions needed to validate model-order fallback"
+        )
+    concrete = [item for item in extracted if item is not None]
+    keys = {item[0] for item in concrete}
+    if len(keys) != 1:
+        raise ValueError(f"optimizer shards disagree on fp32 master-weight field: {sorted(keys)}")
+    key = next(iter(keys))
+    partitions = [item[1] for item in concrete]
+    group_count = len(param_groups)
+    if any(len(groups) < group_count for groups in partitions):
+        observed = [len(groups) for groups in partitions]
+        raise ValueError(
+            "optimizer shards expose fewer fp32 groups than the caller shape contract: "
+            f"observed {observed}, expected {group_count}"
+        )
+
+    checked = 0
+    matched = 0
+    worst_error = 0.0
+    mismatches: list[dict[str, Any]] = []
+    for group_index, shapes in enumerate(param_groups):
+        expected_numel = sum(_numel(shape) for shape in shapes.values())
+        flat = torch.cat([rank[group_index] for rank in partitions])[:expected_numel]
+        if flat.numel() != expected_numel:
+            raise ValueError(
+                f"fp32 master group {group_index} is incomplete: expected {expected_numel}, "
+                f"got {flat.numel()}"
+            )
+        offset = 0
+        for name, shape in shapes.items():
+            count = _numel(shape)
+            segment = flat[offset : offset + count]
+            offset += count
+            reference = reference_signatures.get(name)
+            if reference is None:
+                continue
+            observed_l2 = float(torch.linalg.vector_norm(segment.float()))
+            observed_l1 = float(segment.float().abs().sum())
+            l2_error = _relative_error(observed_l2, float(reference["l2"]))
+            l1_error = _relative_error(observed_l1, float(reference["l1"]))
+            error = max(l2_error, l1_error)
+            worst_error = max(worst_error, error)
+            checked += 1
+            if error <= signature_rtol:
+                matched += 1
+            elif len(mismatches) < 8:
+                mismatches.append(
+                    {
+                        "name": name,
+                        "l2_relative_error": l2_error,
+                        "l1_relative_error": l1_error,
+                    }
+                )
+
+    if checked == 0:
+        raise ValueError("no caller parameter signatures could be matched to the shape contract")
+    match_fraction = matched / checked
+    result = {
+        "method": "fp32_master_tensor_signatures",
+        "master_weight_field": key,
+        "checked_tensors": checked,
+        "matched_tensors": matched,
+        "match_fraction": match_fraction,
+        "minimum_match_fraction": minimum_match_fraction,
+        "signature_rtol": signature_rtol,
+        "worst_relative_error": worst_error,
+        "mismatches": mismatches,
+    }
+    if match_fraction < minimum_match_fraction:
+        raise ValueError(
+            "caller-supplied parameter order failed validation against native fp32 master "
+            f"weights: {matched}/{checked} tensor signatures matched at rtol={signature_rtol}; "
+            f"first mismatches={mismatches}"
+        )
+    return result
 
 
 def reconstruct_zero_adam_state(
     checkpoint_dir: str | Path,
     *,
     parameter_names: Iterable[str] | None = None,
+    parameter_shapes: Mapping[str, Sequence[int]]
+    | Sequence[Mapping[str, Sequence[int]]]
+    | None = None,
+    reference_signatures: Mapping[str, Mapping[str, float]] | None = None,
+    signature_rtol: float = 0.02,
+    minimum_match_fraction: float = 0.95,
 ) -> NativeAdamState:
     """Offline reconstruction of ZeRO-partitioned Adam moments.
 
-    The routine discovers flat ``exp_avg`` and ``exp_avg_sq`` tensors in each
-    data-parallel shard, concatenates rank partitions group-by-group, trims
-    padding according to ``param_shapes``, and splits the result by parameter.
-    It validates every recovered shape before returning.
+    The preferred shape contract is the checkpoint's own ``param_shapes`` field.
+    Some historical GPT-NeoX pipeline checkpoints omit that field. For those
+    packets, a caller may provide the loaded model's ordered parameter shapes and
+    compact tensor signatures. CPS then validates that ordering against the native
+    fp32 master-weight partitions before assigning any Adam moments to names.
     """
 
     import torch
@@ -179,7 +344,35 @@ def reconstruct_zero_adam_state(
     optimizer_payloads = [load_torch_payload(path) for path in optimizer_files]
     model_files = tuple(sorted(root.glob("*model_states.pt")))
     model_payloads = [load_torch_payload(path) for path in model_files]
+
     param_groups = _find_param_shapes(model_payloads)
+    shape_source = "model_checkpoint_param_shapes"
+    validation: dict[str, Any] = {"method": "checkpoint_metadata", "validated": True}
+    if param_groups is None:
+        param_groups = _find_param_shapes(optimizer_payloads)
+        shape_source = "optimizer_checkpoint_param_shapes"
+    if param_groups is None:
+        param_groups = _caller_shape_groups(parameter_shapes)
+        shape_source = "validated_model_parameter_order"
+        if param_groups is None:
+            model_keys = sorted({str(key) for payload in model_payloads for key in payload.keys()})
+            optimizer_keys = sorted(
+                {str(key) for payload in optimizer_payloads[:1] for key in payload.keys()}
+            )
+            raise KeyError(
+                "could not find param_shapes in native checkpoint metadata. "
+                "Supply the loaded model's ordered parameter_shapes and reference_signatures "
+                "for validated reconstruction. "
+                f"model top-level keys={model_keys}; optimizer top-level keys={optimizer_keys}"
+            )
+        validation = _validate_caller_order(
+            optimizer_payloads,
+            param_groups,
+            reference_signatures,
+            signature_rtol=signature_rtol,
+            minimum_match_fraction=minimum_match_fraction,
+        )
+        validation["validated"] = True
 
     avg_by_rank = [_moment_tensors(payload, "exp_avg") for payload in optimizer_payloads]
     sq_by_rank = [_moment_tensors(payload, "exp_avg_sq") for payload in optimizer_payloads]
@@ -187,8 +380,8 @@ def reconstruct_zero_adam_state(
     if any(len(groups) < group_count for groups in avg_by_rank + sq_by_rank):
         observed = [(len(a), len(b)) for a, b in zip(avg_by_rank, sq_by_rank, strict=True)]
         raise ValueError(
-            f"optimizer shards expose fewer moment groups than param_shapes; observed {observed}, "
-            f"expected at least {group_count}"
+            f"optimizer shards expose fewer moment groups than the shape contract; "
+            f"observed {observed}, expected at least {group_count}"
         )
 
     requested = None if parameter_names is None else set(parameter_names)
@@ -223,7 +416,25 @@ def reconstruct_zero_adam_state(
         source_files=tuple(str(path) for path in optimizer_files),
         partition_count=len(optimizer_files),
         parameter_count=total_parameters,
+        shape_source=shape_source,
+        shape_validation=validation,
     )
+
+
+def parameter_reference_signatures(parameters: Mapping[str, Any]) -> dict[str, dict[str, float]]:
+    """Compute compact permutation-invariant signatures for checkpoint-order validation."""
+
+    import torch
+
+    output: dict[str, dict[str, float]] = {}
+    with torch.no_grad():
+        for name, parameter in parameters.items():
+            value = parameter.detach().float()
+            output[name] = {
+                "l2": float(torch.linalg.vector_norm(value).cpu()),
+                "l1": float(value.abs().sum().cpu()),
+            }
+    return output
 
 
 def _rank_key(name: str) -> tuple[int, str]:
@@ -234,7 +445,4 @@ def _rank_key(name: str) -> tuple[int, str]:
 
 
 def _numel(shape: tuple[int, ...]) -> int:
-    result = 1
-    for value in shape:
-        result *= value
-    return result
+    return math.prod(shape)
