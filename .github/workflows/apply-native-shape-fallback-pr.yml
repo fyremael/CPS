@@ -22,14 +22,16 @@ jobs:
         run: python scripts/apply_native_shape_fallback_patch.py
 
       - name: Validate
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e '.[dev,notebooks]'
-          pytest -q
+          set -o pipefail
+          python -m pip install -q --upgrade pip
+          python -m pip install -q -e '.[dev,notebooks]'
+          pytest -q 2>&1 | tee /tmp/pytest.log
           python scripts/validate_notebooks.py
           python -m compileall -q src scripts tests
-          python -m pip install build
-          python -m build
+          python -m pip install -q build
+          python -m build -n
 
       - name: Commit implementation
         run: |
