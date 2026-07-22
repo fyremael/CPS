@@ -88,6 +88,9 @@ The wrapper always exports the Colab execution log, retrieves `/content/cps-expo
 
 ## Notebook pedagogy and live execution
 
+> **Colab import bootstrap.** The notebooks add `/content/CPS/src` to the live kernel path after installation. This is required because a newly created editable-install `.pth` file is not reprocessed automatically by an already-running kernel. No runtime restart is required. The bootstrap prints the resolved `cps.__file__`; subsequent cells should be run only after that confirmation appears.
+
+
 The seven Colab notebooks are written as executable lessons rather than opaque launchers. They show the resolved configuration, runtime inventory, evidence boundary, active attention and JVP backends, per-column projection progress, coupling-sweep progress, result tables, diagnostic figures, and artifact locations. The same line-oriented progress stream is preserved by `colab-cli log`, making long remote runs auditable while they execute.
 
 The Pythia-70M notebook also explains the fused-SDPA forward-AD limitation and displays whether the run used exact `torch.func.jvp` or the declared centered finite-difference fallback.
