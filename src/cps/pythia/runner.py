@@ -16,7 +16,8 @@ from .config import PythiaProbeConfig
 from .data import build_batch
 from .functional_adamw import AdamWHyperparameters, FunctionalAdamWProbe
 from .jvp import build_jvp
-from .native_state import parameter_reference_signatures, reconstruct_zero_adam_state
+from .native_state import parameter_reference_signatures
+from .native_state_packet import reconstruct_zero_adam_state
 from .reduced_operator import project_jacobian
 from .registry import get_run_spec
 
