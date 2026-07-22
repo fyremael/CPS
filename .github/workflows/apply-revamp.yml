@@ -3,6 +3,8 @@ name: Apply CPS notebook revamp
 on:
   push:
     branches: [fix/verbose-notebooks-forward-ad]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
