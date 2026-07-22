@@ -1,0 +1,103 @@
+name: Apply native parameter name alignment
+
+on:
+  push:
+    branches: [fix/native-parameter-name-alignment]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/native-parameter-name-alignment
+          fetch-depth: 0
+      - name: Apply alignment integration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          path = Path('src/cps/pythia/native_state_stable.py')
+          text = path.read_text()
+
+          import_anchor = 'from . import native_state as legacy\n'
+          import_replacement = '''from . import native_state as legacy\nfrom .native_name_alignment import (\n    apply_name_transform,\n    resolve_requested_parameter_names,\n)\n'''
+          if import_anchor not in text:
+              raise SystemExit('stable reader import anchor not found')
+          text = text.replace(import_anchor, import_replacement, 1)
+
+          torch_anchor = '''    import torch\n\n    root = Path(checkpoint_dir)\n'''
+          torch_replacement = '''    import torch\n\n    requested_names = (\n        None if parameter_names is None else tuple(dict.fromkeys(parameter_names))\n    )\n\n    root = Path(checkpoint_dir)\n'''
+          if torch_anchor not in text:
+              raise SystemExit('stable reader requested-name anchor not found')
+          text = text.replace(torch_anchor, torch_replacement, 1)
+
+          old = '''    group_count = len(param_groups)\n    if any(len(groups) < group_count for groups in avg_by_rank + sq_by_rank):\n'''
+          new = '''    alignment = resolve_requested_parameter_names(\n        requested_names,\n        param_groups,\n        parameter_shapes,\n    )\n    if requested_names is not None:\n        validation["name_alignment"] = alignment.report\n    requested_native = (\n        None\n        if requested_names is None\n        else set(alignment.requested_to_native.values())\n    )\n    requested_output = None if requested_names is None else set(requested_names)\n    native_to_requested = {\n        native_name: requested_name\n        for requested_name, native_name in alignment.requested_to_native.items()\n    }\n\n    group_count = len(param_groups)\n    if any(len(groups) < group_count for groups in avg_by_rank + sq_by_rank):\n'''
+          if old not in text:
+              raise SystemExit('stable reader alignment insertion anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''    requested = None if parameter_names is None else set(parameter_names)\n    exp_avg: dict[str, Any] = {}\n    exp_avg_sq: dict[str, Any] = {}\n'''
+          new = '''    exp_avg: dict[str, Any] = {}\n    exp_avg_sq: dict[str, Any] = {}\n'''
+          if old not in text:
+              raise SystemExit('stable reader old requested-set block not found')
+          text = text.replace(old, new, 1)
+
+          old = '''        for name, shape in shapes.items():\n            count = legacy._numel(shape)\n            if requested is None or name in requested:\n                exp_avg[name] = (\n                    flat_avg[offset : offset + count]\n                    .reshape(shape)\n                    .clone()\n                )\n                exp_avg_sq[name] = (\n                    flat_sq[offset : offset + count]\n                    .reshape(shape)\n                    .clone()\n                )\n            offset += count\n            total_parameters += count\n\n    if requested is not None:\n        missing = requested - set(exp_avg)\n        if missing:\n            raise KeyError(\n                "requested parameters absent from native state: "\n                f"{sorted(missing)}"\n            )\n'''
+          new = '''        for name, shape in shapes.items():\n            count = legacy._numel(shape)\n            if requested_native is None or name in requested_native:\n                output_name = native_to_requested.get(name, name)\n                transform = alignment.transforms.get(output_name, "identity")\n                native_avg = (\n                    flat_avg[offset : offset + count]\n                    .reshape(shape)\n                    .clone()\n                )\n                native_sq = (\n                    flat_sq[offset : offset + count]\n                    .reshape(shape)\n                    .clone()\n                )\n                exp_avg[output_name] = apply_name_transform(native_avg, transform)\n                exp_avg_sq[output_name] = apply_name_transform(native_sq, transform)\n            offset += count\n            total_parameters += count\n\n    if requested_output is not None:\n        missing = requested_output - set(exp_avg)\n        if missing:\n            raise KeyError(\n                "requested parameters absent from native state after governed "\n                "name alignment: "\n                f"{sorted(missing)}; alignment={alignment.report}"\n            )\n'''
+          if old not in text:
+              raise SystemExit('stable reader reconstruction block not found')
+          path.write_text(text.replace(old, new, 1))
+
+          runner_path = Path('src/cps/pythia/runner.py')
+          runner = runner_path.read_text()
+          runner_anchor = '''        group_validation = native.shape_validation.get("optimizer_groups")\n'''
+          runner_replacement = '''        name_alignment = native.shape_validation.get("name_alignment")\n        if name_alignment is not None:\n            reporter.metric("native name aliases", name_alignment.get("alias_count", 0))\n            for item in name_alignment.get("aliases", []):\n                if item.get("requested_name") != item.get("native_name"):\n                    reporter.info(\n                        "Native name alignment: "\n                        f"{item.get('native_name')} → {item.get('requested_name')} "\n                        f"({item.get('method')}; transform={item.get('transform')})"\n                    )\n        group_validation = native.shape_validation.get("optimizer_groups")\n'''
+          if runner_anchor not in runner:
+              raise SystemExit('runner name-alignment reporting anchor not found')
+          runner_path.write_text(runner.replace(runner_anchor, runner_replacement, 1))
+
+          tests = Path('tests/pythia/test_native_name_alignment.py')
+          tests.write_text('''from collections import OrderedDict\n\nimport torch\n\nfrom cps.pythia.native_state_packet import reconstruct_zero_adam_state\nfrom cps.pythia.native_name_alignment import resolve_requested_parameter_names\n\n\ndef test_maps_hf_layer_name_to_native_pipeline_occurrence():\n    native = [\n        OrderedDict(\n            [\n                ("module.sequential.2.attention.dense.weight", (2, 2)),\n                ("module.sequential.3.attention.dense.weight", (2, 2)),\n            ]\n        )\n    ]\n    caller = OrderedDict(\n        [\n            ("gpt_neox.layers.0.attention.dense.weight", (2, 2)),\n            ("gpt_neox.layers.1.attention.dense.weight", (2, 2)),\n        ]\n    )\n\n    alignment = resolve_requested_parameter_names(\n        ["gpt_neox.layers.0.attention.dense.weight"],\n        native,\n        caller,\n    )\n\n    assert alignment.requested_to_native == {\n        "gpt_neox.layers.0.attention.dense.weight": (\n            "module.sequential.2.attention.dense.weight"\n        )\n    }\n    assert alignment.report["alias_count"] == 1\n    assert alignment.report["aliases"][0]["method"] == (\n        "semantic_suffix_layer_occurrence"\n    )\n\n\ndef test_reconstructs_requested_hf_name_from_native_metadata_name(tmp_path):\n    native_shapes = OrderedDict(\n        [\n            ("module.sequential.0.word_embeddings.weight", (4, 2)),\n            ("module.sequential.2.attention.dense.weight", (2, 2)),\n            ("module.sequential.2.attention.dense.bias", (2,)),\n            ("module.sequential.2.input_layernorm.weight", (2,)),\n        ]\n    )\n    caller_shapes = OrderedDict(\n        [\n            ("gpt_neox.embed_in.weight", (4, 2)),\n            ("gpt_neox.layers.0.attention.dense.weight", (2, 2)),\n            ("gpt_neox.layers.0.attention.dense.bias", (2,)),\n            ("gpt_neox.layers.0.input_layernorm.weight", (2,)),\n        ]\n    )\n    torch.save(\n        {"iteration": 143000, "param_shapes": [native_shapes]},\n        tmp_path / "mp_rank_00_model_states.pt",\n    )\n\n    decay_m = torch.arange(1.0, 13.0)\n    decay_v = decay_m.square()\n    full_master = torch.arange(1.0, 17.0)\n    for rank in range(2):\n        payload = {\n            "optimizer_state_dict": {\n                "single_partition_of_fp32_groups": [\n                    full_master[rank * 8 : (rank + 1) * 8].clone()\n                ],\n                "optimizer_state_dict": {\n                    "state": {\n                        0: {\n                            "exp_avg": [\n                                decay_m[rank * 6 : (rank + 1) * 6].clone()\n                            ],\n                            "exp_avg_sq": [\n                                decay_v[rank * 6 : (rank + 1) * 6].clone()\n                            ],\n                        }\n                    }\n                },\n            }\n        }\n        torch.save(\n            payload,\n            tmp_path / f"zero_pp_rank_{rank}_mp_rank_00_optim_states.pt",\n        )\n\n    requested = "gpt_neox.layers.0.attention.dense.weight"\n    state = reconstruct_zero_adam_state(\n        tmp_path,\n        parameter_names=[requested],\n        parameter_shapes=caller_shapes,\n    )\n\n    assert set(state.exp_avg) == {requested}\n    assert torch.equal(state.exp_avg[requested], decay_m[8:12].reshape(2, 2))\n    alignment = state.shape_validation["name_alignment"]\n    assert alignment["alias_count"] == 1\n    assert alignment["aliases"][0]["native_name"] == (\n        "module.sequential.2.attention.dense.weight"\n    )\n\n\ndef test_transposes_native_matrix_when_shape_contract_is_reversed():\n    native = [OrderedDict([("module.sequential.2.mlp.dense_h_to_4h.weight", (3, 2))])]\n    caller = OrderedDict(\n        [("gpt_neox.layers.0.mlp.dense_h_to_4h.weight", (2, 3))]\n    )\n\n    alignment = resolve_requested_parameter_names(caller.keys(), native, caller)\n\n    assert alignment.transforms[\n        "gpt_neox.layers.0.mlp.dense_h_to_4h.weight"\n    ] == "transpose_2d"\n''')
+
+          notebook_path = Path('notebooks/04_native_optimizer_state.ipynb')
+          notebook = json.loads(notebook_path.read_text())
+          for cell in notebook['cells']:
+              if cell.get('id') == '0c8e3273-md':
+                  cell['source'] = [
+                      '## Stage 2 — bind and validate the native moments\n',
+                      '\n',
+                      'The optimizer step number is derived from the semantic checkpoint revision. Historical GPT-NeoX packets vary in metadata, optimizer-state layout, and parameter naming. The raw pipeline checkpoint can name the first Transformer block with a pipeline-stage path such as `module.sequential.2.attention.dense.weight`, while Hugging Face names the same tensor `gpt_neox.layers.0.attention.dense.weight`. CPS reconciles moment capacities first, then aligns requested names by exact prefix variants or by the shape-checked occurrence of a semantic suffix across Transformer layers. Every alias and any required two-dimensional transpose is printed and recorded. Ambiguous mappings fail closed.\n',
+                  ]
+          notebook_path.write_text(json.dumps(notebook, indent=1) + '\n')
+
+          project_path = Path('pyproject.toml')
+          project = project_path.read_text()
+          if 'version = "0.2.11"' not in project:
+              raise SystemExit('expected CPS version 0.2.11')
+          project_path.write_text(project.replace('version = "0.2.11"', 'version = "0.2.12"', 1))
+          PY
+      - name: Install and validate
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev,notebooks]'
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install pandas
+          pytest -q
+          python scripts/validate_notebooks.py
+          python -m compileall -q src scripts tests
+          python -m build
+      - name: Commit implementation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/cps/pythia/native_state_stable.py src/cps/pythia/native_name_alignment.py src/cps/pythia/runner.py tests/pythia/test_native_name_alignment.py notebooks/04_native_optimizer_state.ipynb pyproject.toml
+          git commit -m 'Align native GPT-NeoX parameter names with Transformers'
+          git push origin HEAD:fix/native-parameter-name-alignment
