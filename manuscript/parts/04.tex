@@ -1,0 +1,95 @@
+\delta z_{t+L}=J_{t+L-1}\cdots J_t\delta z_t.
+\]
+A second-stage analysis should therefore form a reduced monodromy operator or estimate its action by replaying a short checkpoint window.  A frozen-step warning that disappears in the product may be harmless; a modest local warning that compounds coherently may be serious.
+
+\section{Measurement contracts}
+
+A useful diagnostic separates observables that answer different questions.
+
+\subsection{Asymptotic mode risk}
+
+For discrete-time local maps,
+\[
+R_{ij}=\max_{\phi}\rho(A^{(ij)}(\phi)).
+\]
+If \(R_{ij}>1\), some allowed orientation creates a locally expanding mode.  The phase-robust stability margin is
+\[
+\mu_{ij}=1-R_{ij}.
+\]
+
+\subsection{Finite-horizon reserve}
+
+Define
+\begin{equation}
+G_{ij}(K)=
+\max_{\phi}
+\max_{1\leq k\leq K}
+\norm{A^{(ij)}(\phi)^k}_2.
+\label{eq:finite-gain}
+\end{equation}
+This is the clearest direct answer to the operational question: how large can a perturbation become before the local dynamics have time to contract it?
+
+A resolvent-based Kreiss surrogate provides a complementary and often cheaper screen:
+\[
+\widehat{\mathcal K}_{ij}
+=
+\max_{\phi}
+\max_{z\in\mathcal G,\,|z|>1}
+(|z|-1)\norm{(zI-A^{(ij)}(\phi))^{-1}}_2.
+\]
+The grid \(\mathcal G\) must be reported; this is a comparative estimator, not a certificate.
+
+\subsection{Mode collision and conditioning}
+
+Define
+\[
+\Delta_{ij}
+=
+\min_{\phi,k\neq\ell}
+|\lambda_k(\phi)-\lambda_\ell(\phi)|
+\]
+and
+\[
+\kappa_{ij}^{\max}
+=
+\max_{\phi,k}
+\frac{\norm{x_k}\norm{y_k}}{|y_k^*x_k|}.
+\]
+Small gaps identify possible collisions; large condition numbers identify modes whose spectral location is unreliable under perturbation.  Near a defective point these quantities become singular.
+
+\subsection{A coupling-risk graph}
+
+Let the reduced coordinates or blocks be vertices.  Assign each directed coupling a risk score such as
+\begin{equation}
+\mathcal R_{ij}
+=
+R_{ij}
++w_G\log(1+G_{ij})
++w_\kappa\log(1+\kappa_{ij}^{\max})
++\frac{w_\Delta}{\Delta_{ij}+\eps}.
+\label{eq:risk-score}
+\end{equation}
+The weights are calibration parameters, not universal constants.  The resulting directed graph is a planning object: it shows which block interactions carry fragile modes or large transient reserves.
+
+\section{From measurement to optimizer planning}
+
+A diagnostic earns its place by changing a decision.  \cps{} therefore defines intervention contracts rather than vague recommendations.
+
+\subsection{Damping}
+
+For candidate damping values \(\gamma\), build the corresponding reduced operators and choose the least value satisfying both
+\[
+\max_{(i,j)\in\mathcal E}R_{ij}(\gamma)\leq1-\mu_0
+\]
+and
+\[
+\max_{(i,j)\in\mathcal E}G_{ij}(K;\gamma)\leq G_0.
+\]
+The first constraint protects asymptotic local stability; the second protects finite-horizon reserve.  Either alone can be misleading.
+
+\subsection{Momentum}
+
+Momentum changes the augmented operator in \cref{eq:momentum-augmented}.  A planning sweep evaluates candidate \(\beta\) values under matched nominal progress.  A candidate that improves the nominal convergence factor but sharply increases \(G_{ij}\) is an acceleration purchased with inadequate reserve.
+
+\subsection{Preconditioning}
+

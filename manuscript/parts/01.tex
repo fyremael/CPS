@@ -1,0 +1,95 @@
+
+The distinction between magnitude and orientation is essential.  Gershgorin radii, gradient norms, and many blockwise statistics see the size of interactions but not their coherent combination.  A phase sweep holds the former fixed while varying the latter.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/pipeline.png}
+\caption{The \cps{} pipeline.  The full optimizer map is never materialized as a dense Jacobian.  Matrix-free Jacobian-vector products generate a reduced operator; structured phase families probe its couplings; the measurements support auditable optimizer interventions.}
+\label{fig:pipeline}
+\end{figure}
+
+\section{The optimizer as a local dynamical system}
+
+\subsection{The complete state matters}
+
+Let \(\theta_t\in\R^p\) denote model parameters and let \(s_t\) collect every state variable maintained by the optimizer: momentum, second moments, matrix statistics, trust-region multipliers, or other memory.  The complete state is
+\[
+z_t=(\theta_t,s_t)\in\mathcal Z.
+\]
+After freezing the minibatch and all algorithmic randomness at step \(t\), write one update as
+\[
+z_{t+1}=F_t(z_t).
+\]
+The local optimizer-state Jacobian is
+\begin{equation}
+J_t=DF_t(z_t).
+\label{eq:optimizer-jacobian}
+\end{equation}
+The frozen-step approximation is
+\[
+\delta z_{t+1}=J_t\delta z_t+O(\norm{\delta z_t}^2).
+\]
+
+The phrase \emph{optimizer-state Jacobian} is deliberate.  Linearizing only the parameter update can erase the very couplings introduced by momentum or adaptation.
+
+For gradient descent on a twice differentiable objective,
+\[
+\theta^+=\theta-\eta\nabla L(\theta),
+\qquad
+J=I-\eta H,
+\]
+where \(H=\nabla^2L(\theta)\).  Since \(H\) is symmetric, this idealized operator is normal.  Its spectrum determines its powers.
+
+For a frozen preconditioner \(P\),
+\[
+\theta^+=\theta-\eta P\nabla L(\theta),
+\qquad
+J\approx I-\eta PH.
+\]
+Even when \(P\) and \(H\) are individually symmetric positive definite, \(PH\) need not be normal unless the two commute.  Recent work has made this source of non-normality explicit for adaptive optimization \cite{ghosh2026}.
+
+For heavy-ball momentum, with \(v^+=\beta v+\nabla L(\theta)\) and \(\theta^+=\theta-\eta v^+\), the augmented linearization is
+\begin{equation}
+\begin{bmatrix}
+\delta\theta^+\\[0.2em]
+\delta v^+
+\end{bmatrix}
+=
+\begin{bmatrix}
+I-\eta H & -\eta\beta I\\
+H & \beta I
+\end{bmatrix}
+\begin{bmatrix}
+\delta\theta\\[0.2em]
+\delta v
+\end{bmatrix}.
+\label{eq:momentum-augmented}
+\end{equation}
+The off-diagonal blocks make non-normal transient behavior possible even for a symmetric Hessian.  Transient growth in accelerated optimization is known already in quadratic settings \cite{mohammadi2021}; \cps{} asks which couplings make that growth fragile.
+
+\subsection{Why the nominal spectrum is not enough}
+
+If \(J\) is normal, then
+\[
+\norm{J^k}_2=\rho(J)^k.
+\]
+If \(J\) is non-normal, its eigenvectors need not be orthogonal, and \(\norm{J^k}_2\) may first grow and only later decay.  Thus \(\rho(J)<1\) guarantees asymptotic contraction for a fixed matrix but does not guarantee a quiet journey to that limit.
+
+This matters because training is finite-horizon, noisy, and time-varying.  A transient lasting twenty steps is not negligible when those twenty steps cross a sharp region, overflow a mixed-precision accumulator, or push adaptive state into a different regime.
+
+Pseudospectral analysis was developed precisely for situations in which eigenvalues alone understate sensitivity and transient amplification \cite{trefethen2005}.  Structured pseudospectra further restrict the perturbations to those permitted by the problem \cite{guglielmi2024}.  \cps{} selects a particularly interpretable structured family: orientation changes at fixed coupling strength.
+
+\section{Phase-restricted structured pseudospectra}
+
+Let \(A\in\C^{r\times r}\) be a reduced optimizer operator.  We begin with a scalar coupling and then pass to blocks.
+
+\begin{definition}[Magnitude-preserving entry phase family]
+For \(a_{ij}\neq0\), define
+\begin{equation}
+A^{(ij)}(\phi)
+=
+A+
+\left(
+|a_{ij}|e^{i(\arg a_{ij}+\phi)}-a_{ij}
+\right)e_ie_j^*.
+\label{eq:entry-family}

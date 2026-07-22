@@ -1,0 +1,89 @@
+  \item refine the phase grid near maxima and minimum gaps.
+  \end{enumerate}
+\item Aggregate a coupling-risk graph and evaluate candidate interventions.
+\item Emit an auditable proposal with the triggering measurements, confidence, expected effect, and rollback condition.
+\end{enumerate}
+
+\section{A two-dimensional closed form}
+
+For
+\[
+A(\phi)=
+\begin{bmatrix}
+d_1 & re^{i\phi}\\
+s & d_2
+\end{bmatrix},
+\]
+the eigenvalues are
+\[
+\lambda_{\pm}(\phi)
+=
+\frac{d_1+d_2}{2}
+\pm
+\frac12\sqrt{(d_1-d_2)^2+4rs e^{i\phi}}.
+\]
+The circle traced inside the square root is mapped through a branch point.  This simple formula already explains loops, branch exchange, and exceptional sensitivity near a vanishing discriminant.
+
+\begin{thebibliography}{99}
+
+\bibitem{biderman2023}
+S. Biderman, H. Schoelkopf, Q. Anthony, H. Bradley, K. O'Brien, E. Hallahan,
+M.~A. Khan, S. Purohit, U.~S.~S.~N. Sai Prashanth, E. Raff, A. Skowron,
+L. Sutawika, and O. van der Wal.
+\newblock Pythia: A suite for analyzing large language models across training and scaling.
+\newblock In \emph{Proceedings of the 40th International Conference on Machine Learning}, 2023.
+
+\bibitem{vanderwal2025}
+O. van der Wal, P. Lesci, M. Muller-Eberstein, N. Saphra, H. Schoelkopf,
+W. Zuidema, and S. Biderman.
+\newblock PolyPythias: Stability and outliers across fifty language model pre-training runs.
+\newblock arXiv:2503.09543, 2025.
+
+\bibitem{cohen2021}
+J.~M. Cohen, S. Kaur, Y. Li, J.~Z. Kolter, and A. Talwalkar.
+\newblock Gradient descent on neural networks typically occurs at the edge of stability.
+\newblock In \emph{International Conference on Learning Representations}, 2021.
+
+\bibitem{ghosh2026}
+S. Ghosh.
+\newblock Non-normal spectral signatures of instability in neural network training dynamics.
+\newblock arXiv:2605.23476, 2026.
+
+\bibitem{guglielmi2024}
+N. Guglielmi and C. Lubich.
+\newblock Transient dynamics under structured perturbations: bridging unstructured and structured pseudospectra.
+\newblock arXiv:2401.09601, 2024.
+
+\bibitem{gupta2018}
+V. Gupta, T. Koren, and Y. Singer.
+\newblock Shampoo: Preconditioned stochastic tensor optimization.
+\newblock In \emph{Proceedings of the 35th International Conference on Machine Learning}, 2018.
+
+\bibitem{jankowski2019}
+E. Jankowski and C.~R. Johnson.
+\newblock Eigenvalue paths arising from matrix paths.
+\newblock arXiv:1909.10589, 2019.
+
+\bibitem{mohammadi2021}
+H. Mohammadi, S. Samuelson, and M.~R. Jovanovi\'{c}.
+\newblock Transient growth of accelerated optimization algorithms.
+\newblock arXiv:2103.08017, 2021.
+
+\bibitem{pearlmutter1994}
+B.~A. Pearlmutter.
+\newblock Fast exact multiplication by the Hessian.
+\newblock \emph{Neural Computation}, 6(1):147--160, 1994.
+
+\bibitem{trefethen2005}
+L.~N. Trefethen and M. Embree.
+\newblock \emph{Spectra and Pseudospectra: The Behavior of Nonnormal Matrices and Operators}.
+\newblock Princeton University Press, 2005.
+
+\bibitem{vinyals2011}
+O. Vinyals and D. Povey.
+\newblock Krylov subspace descent for deep learning.
+\newblock arXiv:1111.4259, 2011.
+
+\end{thebibliography}
+
+\end{document}

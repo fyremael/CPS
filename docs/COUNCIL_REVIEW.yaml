@@ -1,0 +1,46 @@
+artifact: coupling-phase-spectroscopy
+status: prototype
+reviews:
+  axiomatist:
+    status: partial
+    obligations:
+      - formalize block-covariant phase families
+      - prove cycle-support criterion in manuscript
+  cartographer:
+    status: complete
+    obligations: []
+  verifier:
+    status: partial
+    obligations:
+      - add gauge-invariance property tests
+      - add branch-exchange fixtures
+  adversary:
+    status: partial
+    obligations:
+      - test basis dependence
+      - compare against nominal finite-horizon gain
+      - construct false-positive interventions
+  formalist:
+    status: partial
+    obligations:
+      - specify differentiability assumptions for optimizer maps
+      - distinguish frozen-step and nonautonomous claims
+  steward:
+    status: complete
+    obligations: []
+  grammarian:
+    status: complete
+    obligations: []
+  composer:
+    status: complete
+    obligations: []
+  amanuensis:
+    status: complete
+    obligations: []
+  referee:
+    status: pending
+    obligations:
+      - review after Stage B evidence exists
+acceptance_blockers:
+  - no neural optimizer-state results yet
+  - no predictive spike benchmark yet

@@ -1,0 +1,47 @@
+model:
+  run: pythia-70m
+  revision: step0
+  device: auto
+  dtype: float32
+  cache_dir: /content/.cache/huggingface
+
+data:
+  source: builtin
+  sequence_length: 64
+  batch_size: 1
+
+state:
+  moment_source: reconstructed
+  step: 1
+  beta1: 0.9
+  beta2: 0.95
+  epsilon: 1.0e-8
+  learning_rate: 6.0e-4
+  weight_decay: 0.01
+
+basis:
+  parameter_patterns:
+    - gpt_neox.layers.0.attention.query_key_value.weight
+    - gpt_neox.layers.0.attention.dense.weight
+    - gpt_neox.layers.0.mlp.dense_h_to_4h.weight
+    - gpt_neox.layers.0.mlp.dense_4h_to_h.weight
+  max_selected_numel: 5000000
+  components: [theta, update, random]
+  random_vectors_per_block: 1
+  rank: 12
+  seed: 23
+
+jacobian:
+  mode: finite_difference
+  finite_difference_relative_step: 1.0e-4
+  finite_difference_absolute_floor: 1.0e-6
+
+sweep:
+  phase_count: 33
+  finite_horizon: 16
+  compute_kreiss: false
+  maximum_couplings: 16
+
+output:
+  root: /content/cps-artifacts
+  run_name: pythia-70m-longitudinal

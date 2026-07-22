@@ -1,0 +1,42 @@
+model:
+  run: pythia-70m
+  revision: step143000
+  device: auto
+  dtype: float32
+  cache_dir: /content/.cache/huggingface
+
+data:
+  source: builtin
+  sequence_length: 32
+  batch_size: 1
+
+state:
+  moment_source: native
+  native_checkpoint_dir: /content/native-pythia-70m-step143000
+  step: 143000
+  beta1: 0.9
+  beta2: 0.95
+  epsilon: 1.0e-8
+  learning_rate: 6.0e-5
+  weight_decay: 0.01
+
+basis:
+  parameter_patterns:
+    - gpt_neox.layers.0.attention.dense.weight
+  max_selected_numel: 1000000
+  components: [theta, momentum, update, random]
+  random_vectors_per_block: 1
+  rank: 4
+
+jacobian:
+  mode: finite_difference
+
+sweep:
+  phase_count: 33
+  finite_horizon: 12
+  compute_kreiss: false
+  maximum_couplings: 8
+
+output:
+  root: /content/cps-artifacts
+  run_name: pythia-70m-native

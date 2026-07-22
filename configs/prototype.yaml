@@ -1,0 +1,37 @@
+experiment:
+  name: cps_transformer_prototype
+  seed: 17
+  checkpoints: [100, 250, 500, 1000]
+
+projection:
+  method: arnoldi
+  rank: 64
+  probe_sources:
+    - recent_gradients
+    - optimizer_updates
+    - random_tangent_vectors
+  two_sided: false
+
+sweep:
+  family: entry_phase
+  phase_count: 33
+  edge_selection: top_off_diagonal_magnitude
+  edge_count: 24
+  finite_horizon: 20
+  compute_kreiss_surrogate: true
+
+metrics:
+  - spectral_radius_max
+  - spectral_abscissa_max
+  - finite_horizon_gain
+  - kreiss_surrogate
+  - minimum_gap
+  - maximum_eigenvalue_condition
+  - baseline_displacement_max
+  - trace_moment_harmonics
+
+planning:
+  stability_target: 0.98
+  candidate_learning_rate_multipliers: [0.5, 0.75, 1.0, 1.25]
+  candidate_momentum: [0.85, 0.9, 0.95, 0.98]
+  candidate_damping: [0.0, 0.0001, 0.001, 0.01]

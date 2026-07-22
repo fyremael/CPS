@@ -1,0 +1,95 @@
+\end{equation}
+Thus \(A^{(ij)}(0)=A\) and \(|A^{(ij)}(\phi)_{ij}|=|a_{ij}|\) for every \(\phi\).
+\end{definition}
+
+\begin{definition}[Phase-restricted spectral set]
+For an angular budget \(\delta\in[0,\pi]\), define
+\begin{equation}
+\Sigma^{\mathrm{phase}}_{ij}(A;\delta)
+=
+\bigcup_{|\phi|\leq\delta}
+\spec\!\left(A^{(ij)}(\phi)\right).
+\label{eq:phase-spectrum}
+\end{equation}
+\end{definition}
+
+The ordinary \(\eps\)-pseudospectrum admits the perturbational definition
+\[
+\Lambda_\eps(A)
+=
+\bigcup_{\norm{E}_2\leq\eps}\spec(A+E).
+\]
+The phase-restricted set is a thin, structured slice of this larger region.
+
+\begin{proposition}[Containment in the ordinary pseudospectrum]
+For \(\delta\in[0,\pi]\),
+\begin{equation}
+\Sigma^{\mathrm{phase}}_{ij}(A;\delta)
+\subseteq
+\Lambda_\eps(A),
+\qquad
+\eps=2|a_{ij}|\sin(\delta/2).
+\label{eq:containment}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+The perturbation in \cref{eq:entry-family} has rank one.  Its only nonzero entry is
+\[
+a_{ij}(e^{i\phi}-1),
+\]
+whose modulus is
+\[
+|a_{ij}|\,|e^{i\phi}-1|
+=2|a_{ij}|\left|\sin\frac{\phi}{2}\right|.
+\]
+For a one-entry matrix, the spectral and Frobenius norms equal the modulus of that entry.  The maximum over \(|\phi|\leq\delta\) is the stated \(\eps\).  Every matrix in the phase family is therefore an admissible perturbation in \(\Lambda_\eps(A)\).
+\end{proof}
+
+The proposition gives the construction a precise place in pseudospectral theory.  It also clarifies what \cps{} does \emph{not} claim.  It does not approximate the entire pseudospectrum.  It trades completeness for interpretability.
+
+\subsection{The velocity of an eigenvalue}
+
+The local response of a simple eigenvalue has an exact formula.
+
+\begin{proposition}[Eigenvalue phase velocity]
+Let \(\lambda_k(\phi)\) be a simple eigenvalue of \(A^{(ij)}(\phi)\), with right eigenvector \(x_k\) and left eigenvector \(y_k\), normalized arbitrarily but with \(y_k^*x_k\neq0\).  Then
+\begin{equation}
+\frac{d\lambda_k}{d\phi}
+=
+ i\,a_{ij}(\phi)
+\frac{\overline{y_{k,i}}x_{k,j}}{y_k^*x_k},
+\qquad
+a_{ij}(\phi)=|a_{ij}|e^{i(\arg a_{ij}+\phi)}.
+\label{eq:eigenvalue-velocity}
+\end{equation}
+\end{proposition}
+
+\begin{proof}
+For a differentiable simple eigenpair, standard perturbation theory gives
+\[
+\lambda_k'(\phi)=\frac{y_k^*A'(\phi)x_k}{y_k^*x_k}.
+\]
+Here \(A'(\phi)=i a_{ij}(\phi)e_ie_j^*\), yielding \cref{eq:eigenvalue-velocity}.
+\end{proof}
+
+The numerator identifies the coupling's participation in the mode.  The denominator is the left-right eigenvector overlap.  When that overlap is small, the eigenvalue is ill-conditioned and the trajectory can move rapidly.  This is the local bridge from a visible loop to non-normal fragility.
+
+\subsection{When a coupling cannot move the spectrum}
+
+Not every off-diagonal entry matters spectrally.  The graph structure tells us when it can.
+
+Associate to \(A\) a directed support graph with edge \(i\to j\) when \(a_{ij}\neq0\).
+
+\begin{proposition}[Cycle-support criterion]
+If the directed edge \(i\to j\) lies on no directed cycle of the support graph, then the characteristic polynomial of \(A\) is independent of \(a_{ij}\).  Consequently,
+\[
+\spec(A^{(ij)}(\phi))=\spec(A)
+\quad\text{for all }\phi.
+\]
+\end{proposition}
+
+\begin{proof}
+Expand \(\det(\lambda I-A)\) as a sum over permutations.  A monomial containing the off-diagonal factor \(a_{ij}\) corresponds to a permutation with \(i\mapsto j\).  The cycle decomposition of that permutation must then contain a directed cycle beginning with \(i\to j\), followed by a directed path from \(j\) back to \(i\) through other selected off-diagonal factors.  If no such directed cycle exists in the support graph, no determinant monomial contains \(a_{ij}\).  The characteristic polynomial is therefore independent of that entry.
+\end{proof}
+

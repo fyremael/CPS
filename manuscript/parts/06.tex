@@ -1,0 +1,95 @@
+\item Is positive warning lead time obtained across seeds?
+\item Do interventions reduce failures under matched compute?
+\item Is amortized measurement overhead below two percent at sparse cadence?
+\end{enumerate}
+
+\subsection{Baselines and acceptance criteria}
+
+The strongest comparison is not nominal spectral radius alone.  Baselines must include gradient norm, update-to-weight ratio, largest Hessian or generalized Gauss--Newton eigenvalue, nominal eigenvector condition, nominal finite-horizon gain, and norm-matched random structured perturbations.
+
+The programme proceeds only if:
+\begin{itemize}[leftmargin=1.5em]
+\item at least one \cps{} feature improves spike-prediction precision--recall area by ten percent relative over the strongest scalar baseline;
+\item median warning lead time is positive across at least five seeds;
+\item a frozen \cps{} policy reduces instability incidence by thirty percent at no more than five percent time-to-target cost;
+\item intervention direction agrees across prototype and scale-transfer settings in at least eighty percent of matched checkpoints.
+\end{itemize}
+
+These thresholds are deliberately severe.  A sophisticated diagnostic that cannot clear them should remain a research instrument rather than a production monitor.
+
+\section{Pythia as a longitudinal laboratory}
+
+A diagnostic of training dynamics needs more than a collection of final models.  It needs the trajectory: checkpoints dense enough to reveal when a structure appears, replicated runs sufficient to distinguish a law from an accident, and optimizer state sufficient to reconstruct the actual local update map.  Pythia supplies the first two ingredients at unusual resolution, and its native GPT--NeoX artifacts supply the third for governed checkpoints \cite{biderman2023}.  PolyPythia adds replicated initial conditions and documented outliers across fifty pre-training runs \cite{vanderwal2025}.
+
+This makes the suite more than a convenient benchmark.  It is a longitudinal laboratory.  The same architectural family can be observed at many ages, under several scales, and across controlled changes of seed.  A proposed warning signal may therefore be asked the questions that matter:
+\begin{quote}
+Did the signal appear before the disturbance?  Did it recur in another run?  Did it survive scale?  Did acting on it help?
+\end{quote}
+
+\subsection{The measured state}
+
+For AdamW, the selected local state is written
+\[
+z=(\theta,m,u),
+\qquad
+u=\log(v+\tau),
+\qquad
+v+\tau=e^u,
+\]
+where \(\tau>0\) is a declared floor.  The logarithmic coordinate keeps the second moment positive under infinitesimal perturbation.  A block-diagonal scaling \(S\) makes parameter, first-moment, and second-moment coordinates dimensionless, and the analyzed operator is
+\[
+\widetilde J=SJS^{-1}.
+\]
+This similarity does not change the spectrum of the complete selected operator, but it prevents a coupling from appearing important merely because its coordinates were measured in incompatible units.
+
+The implementation differentiates a governed subset of model parameters.  Parameters outside that subset remain frozen context for the functional model call.  Thus the object is the exact Jacobian of a declared selected-coordinate map, not a claim that the rest of the network has vanished.  The closure residual
+\[
+r_j=Jq_j-QQ^*Jq_j
+\]
+records how much each probe direction escapes the reduced subspace.  A spectral claim without this residual is incomplete.
+
+\subsection{The experimental ladder}
+
+The programme advances through the following gates.
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Gate & Subject & Scientific role \\
+\midrule
+P0 & Pythia--70M & replay, JVP, and projection validation \\
+P1 & Pythia--70M checkpoints & longitudinal development of CPS risk \\
+P2 & PolyPythia--70M seeds & reproducibility and outlier prediction \\
+P3 & PolyPythia--160M controls & initialization versus data-order attribution \\
+P4 & 160M and 410M & transfer of rankings and interventions \\
+P5 & 1B and 2.8B & sparse external validation \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The order is part of the method.  A prediction rule is frozen before the held-out seed or scale is inspected.  A larger model is not used to tune the rule later credited with transfer.  Dense measurement is concentrated where the instrument is cheap enough to audit; expensive scales are reserved for decisive tests.
+
+\subsection{Prospective prediction}
+
+At checkpoint \(t\), let \(C_t\) denote the CPS feature vector and \(B_t\) a vector of conventional diagnostics.  A future event label \(Y_{t,h}\) is defined entirely from steps \(t+1,\ldots,t+h\).  The relevant comparison is
+\[
+Y_{t,h}\sim B_t
+\qquad\text{against}\qquad
+Y_{t,h}\sim(B_t,C_t).
+\]
+Rows are grouped by training run or seed.  Random row splits are prohibited because adjacent checkpoints share both state and future.  The diagnostic succeeds only if the second model improves held-out prediction, calibration, or warning lead time beyond the first.
+
+PolyPythia makes a particularly clean falsification possible.  Its reported outlier runs may be hidden during policy construction and then revealed only after an early-checkpoint score has been assigned.  If CPS cannot rank such departures prospectively, the claim that it measures latent optimizer fragility is weakened.
+
+\subsection{Causal continuation}
+
+Prediction is not planning.  A CPS recommendation becomes optimizer evidence only in a matched continuation.  Two forks begin from identical model weights, optimizer state, data position, and random state.  One follows the baseline update; the other changes exactly one real control---for example a learning-rate scale, first-moment coefficient, denominator floor, clipping threshold, or damping parameter.  The comparison is made at matched tokens and compute.
+
+The strongest result would have the following form:
+\begin{enumerate}[leftmargin=1.7em]
+\item a coupling becomes phase-fragile before a disturbance;
+\item the same signature recurs across seeds or nearby scales;
+\item the planner identifies a specific control expected to restore reserve;
+\item the matched continuation improves stability without erasing nominal progress;
+\item the post-intervention CPS measurement moves in the predicted direction.
+\end{enumerate}
