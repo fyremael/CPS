@@ -1,0 +1,119 @@
+name: Apply Colab import bootstrap fix
+
+on:
+  push:
+    branches: [fix/colab-import-bootstrap]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/colab-import-bootstrap
+          fetch-depth: 0
+
+      - name: Patch every Colab notebook bootstrap
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          notebooks = sorted(Path('notebooks').glob('*.ipynb'))
+          if not notebooks:
+              raise SystemExit('no notebooks found')
+
+          marker = '[BOOT] CPS import verified from'
+          patched = []
+          for path in notebooks:
+              notebook = json.loads(path.read_text(encoding='utf-8'))
+              target = None
+              for cell in notebook.get('cells', []):
+                  if cell.get('cell_type') != 'code':
+                      continue
+                  source = ''.join(cell.get('source', []))
+                  if 'pip' in source and 'CPS_REPO_URL' in source and 'os.chdir(repo)' in source:
+                      target = cell
+                      break
+              if target is None:
+                  raise RuntimeError(f'bootstrap cell not found in {path}')
+              source = ''.join(target.get('source', []))
+              if marker not in source:
+                  addition = '''\n\n# Editable installs write a .pth file, but the running Colab kernel does not\n# automatically reprocess newly-created .pth files. Put the source tree on\n# sys.path explicitly so the very next cell can import CPS without a restart.\nimport importlib\nsrc_dir = repo / "src"\nif str(src_dir) not in sys.path:\n    sys.path.insert(0, str(src_dir))\nimportlib.invalidate_caches()\nimport cps\nprint(f"[BOOT] CPS import verified from {cps.__file__}", flush=True)\n'''
+                  source = source.rstrip() + addition
+                  target['source'] = source.splitlines(keepends=True)
+                  path.write_text(json.dumps(notebook, indent=1) + '\n', encoding='utf-8')
+                  patched.append(str(path))
+          print('patched notebooks:')
+          print('\n'.join(patched))
+          PY
+
+      - name: Add regression test and documentation
+        run: |
+          cat > tests/test_notebook_bootstrap.py <<'PY'
+          import json
+          from pathlib import Path
+
+
+          def test_colab_bootstraps_make_src_importable_without_kernel_restart():
+              notebooks = sorted(Path('notebooks').glob('*.ipynb'))
+              assert notebooks
+              for path in notebooks:
+                  notebook = json.loads(path.read_text(encoding='utf-8'))
+                  sources = [
+                      ''.join(cell.get('source', []))
+                      for cell in notebook.get('cells', [])
+                      if cell.get('cell_type') == 'code'
+                  ]
+                  bootstrap = next(
+                      (source for source in sources if 'CPS_REPO_URL' in source and 'os.chdir(repo)' in source),
+                      None,
+                  )
+                  assert bootstrap is not None, path
+                  assert 'sys.path.insert(0, str(src_dir))' in bootstrap, path
+                  assert 'importlib.invalidate_caches()' in bootstrap, path
+                  assert 'import cps' in bootstrap, path
+                  assert '[BOOT] CPS import verified from' in bootstrap, path
+          PY
+
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('README.md')
+          text = path.read_text(encoding='utf-8')
+          anchor = '## Notebook pedagogy and live execution\n'
+          note = (
+              '> **Colab import bootstrap.** The notebooks add `/content/CPS/src` to the live '
+              'kernel path after installation. This is required because a newly created editable-install '
+              '`.pth` file is not reprocessed automatically by an already-running kernel. No runtime restart '
+              'is required.\n\n'
+          )
+          if note not in text:
+              text = text.replace(anchor, anchor + '\n' + note)
+              path.write_text(text, encoding='utf-8')
+
+          pyproject = Path('pyproject.toml')
+          text = pyproject.read_text(encoding='utf-8').replace('version = "0.2.1"', 'version = "0.2.2"')
+          pyproject.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Validate
+        run: |
+          python scripts/validate_notebooks.py
+          python -m compileall -q src scripts tests
+          python -m pip install -q pytest numpy scipy matplotlib pyyaml
+          pytest -q tests/test_notebook_bootstrap.py tests/test_spectra.py
+
+      - name: Remove temporary workflow and commit
+        run: |
+          rm -f .github/workflows/apply-colab-import-bootstrap.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix Colab editable-install import bootstrap"
+          git push origin HEAD:fix/colab-import-bootstrap
