@@ -360,12 +360,17 @@ def reconstruct_zero_adam_state(
         "method": "checkpoint_metadata",
         "validated": True,
     }
+    # Name alignment must see the complete metadata contract, including a
+    # parameter class that the released packet does not expose moments for.
+    # Capacity reconciliation can then narrow ``param_groups`` independently.
+    alignment_groups = None
 
     if param_groups is None:
         param_groups = legacy._find_param_shapes(optimizer_payloads)
         shape_source = "optimizer_checkpoint_param_shapes"
 
     if param_groups is not None:
+        alignment_groups = param_groups
         param_groups, metadata_report = _infer_shape_groups(
             param_groups,
             avg_capacities,
@@ -404,6 +409,7 @@ def reconstruct_zero_adam_state(
                 f"optimizer top-level keys={optimizer_keys}"
             )
 
+        alignment_groups = caller_groups
         param_groups, group_report = _infer_shape_groups(
             caller_groups,
             avg_capacities,
@@ -446,9 +452,11 @@ def reconstruct_zero_adam_state(
         if group_report is not None:
             validation["optimizer_groups"] = group_report
 
+    if alignment_groups is None:
+        raise RuntimeError("native parameter-name alignment contract was not established")
     alignment = resolve_requested_parameter_names(
         requested_names,
-        param_groups,
+        alignment_groups,
         parameter_shapes,
     )
     if requested_names is not None:
