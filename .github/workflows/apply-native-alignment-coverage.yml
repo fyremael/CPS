@@ -1,0 +1,57 @@
+name: Apply native alignment coverage patch
+
+on:
+  push:
+    branches: [fix/native-parameter-name-alignment]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/native-parameter-name-alignment
+          fetch-depth: 0
+      - name: Preserve full metadata contract for name alignment
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/cps/pythia/native_state_stable.py')
+          text = path.read_text()
+
+          old = '''    validation: dict[str, Any] = {\n        "method": "checkpoint_metadata",\n        "validated": True,\n    }\n\n    if param_groups is None:\n'''
+          new = '''    validation: dict[str, Any] = {\n        "method": "checkpoint_metadata",\n        "validated": True,\n    }\n    # Name alignment must see the complete metadata contract, including a\n    # parameter class that the released packet does not expose moments for.\n    # Capacity reconciliation can then narrow ``param_groups`` independently.\n    alignment_groups = None\n\n    if param_groups is None:\n'''
+          if old not in text:
+              raise SystemExit('alignment_groups initialization anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''    if param_groups is not None:\n        param_groups, metadata_report = _infer_shape_groups(\n'''
+          new = '''    if param_groups is not None:\n        alignment_groups = param_groups\n        param_groups, metadata_report = _infer_shape_groups(\n'''
+          if old not in text:
+              raise SystemExit('metadata alignment contract anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''        param_groups, group_report = _infer_shape_groups(\n            caller_groups,\n'''
+          new = '''        alignment_groups = caller_groups\n        param_groups, group_report = _infer_shape_groups(\n            caller_groups,\n'''
+          if old not in text:
+              raise SystemExit('caller alignment contract anchor not found')
+          text = text.replace(old, new, 1)
+
+          old = '''    alignment = resolve_requested_parameter_names(\n        requested_names,\n        param_groups,\n        parameter_shapes,\n    )\n'''
+          new = '''    if alignment_groups is None:\n        raise RuntimeError("native parameter-name alignment contract was not established")\n    alignment = resolve_requested_parameter_names(\n        requested_names,\n        alignment_groups,\n        parameter_shapes,\n    )\n'''
+          if old not in text:
+              raise SystemExit('resolver alignment contract anchor not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/cps/pythia/native_state_stable.py
+          git commit -m 'Align names against the complete native metadata contract'
+          git push origin HEAD:fix/native-parameter-name-alignment
