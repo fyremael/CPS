@@ -1,0 +1,112 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /opt/hostedtoolcache/Python/3.12.13/x64/bin/python
+cachedir: .pytest_cache
+rootdir: /home/runner/work/CPS/CPS
+configfile: pyproject.toml
+testpaths: tests
+plugins: cov-7.1.0, anyio-4.14.2
+collecting ... collected 52 items
+
+tests/pythia/test_basis.py::test_semantic_basis_is_orthonormal PASSED    [  1%]
+tests/pythia/test_blocks.py::test_semantic_block_classification_and_selection PASSED [  3%]
+tests/pythia/test_config.py::test_load_smoke_config PASSED               [  5%]
+tests/pythia/test_config.py::test_unknown_config_key_fails PASSED        [  7%]
+tests/pythia/test_config.py::test_jacobian_and_attention_defaults_are_forward_ad_safe PASSED [  9%]
+tests/pythia/test_features.py::test_extract_checkpoint_features PASSED   [ 11%]
+tests/pythia/test_functional_adamw.py::test_functional_map_and_jvp_match_finite_difference PASSED [ 13%]
+tests/pythia/test_jvp.py::test_forward_ad_jvp_preflight_reports_exact_backend PASSED [ 15%]
+tests/pythia/test_jvp.py::test_auto_backend_falls_back_when_forward_ad_is_unimplemented PASSED [ 17%]
+tests/pythia/test_jvp.py::test_explicit_forward_ad_backend_fails_closed PASSED [ 19%]
+tests/pythia/test_native_metadata_partial_group.py::test_reconciles_checkpoint_param_shapes_with_decay_only_moments PASSED [ 21%]
+tests/pythia/test_native_metadata_partial_group.py::test_metadata_partial_packet_fails_closed_for_unavailable_parameter PASSED [ 23%]
+tests/pythia/test_native_optimizer_groups.py::test_infers_weight_decay_and_no_decay_groups PASSED [ 25%]
+tests/pythia/test_native_optimizer_groups.py::test_rejects_optimizer_group_capacity_mismatch FAILED [ 26%]
+tests/pythia/test_native_optimizer_groups.py::test_pythia_70m_deficit_is_exactly_no_decay_group PASSED [ 28%]
+tests/pythia/test_native_reader_binding.py::test_runner_binds_packet_aware_native_reader_directly PASSED [ 30%]
+tests/pythia/test_native_reader_reload.py::test_packet_module_can_be_reloaded_repeatedly PASSED [ 32%]
+tests/pythia/test_native_reader_reload.py::test_two_group_fallback_remains_non_recursive_after_reload PASSED [ 34%]
+tests/pythia/test_native_single_moment_group.py::test_reconstructs_requested_decay_parameter_from_single_moment_group PASSED [ 36%]
+tests/pythia/test_native_single_moment_group.py::test_fails_closed_when_requested_parameter_has_no_native_moments PASSED [ 38%]
+tests/pythia/test_native_state.py::test_reconstruct_partitioned_adam_state PASSED [ 40%]
+tests/pythia/test_native_state.py::test_reconstructs_when_old_metadata_omits_param_shapes PASSED [ 42%]
+tests/pythia/test_native_state.py::test_rejects_unvalidated_model_parameter_order PASSED [ 44%]
+tests/pythia/test_native_state.py::test_finds_param_shapes_in_optimizer_metadata PASSED [ 46%]
+tests/pythia/test_planner.py::test_planner_returns_candidate PASSED      [ 48%]
+tests/pythia/test_planner.py::test_damping_family_is_contracting_surrogate PASSED [ 50%]
+tests/pythia/test_reduced_operator.py::test_project_jacobian_recovers_dense_operator PASSED [ 51%]
+tests/pythia/test_registry.py::test_checkpoint_grid_has_154_steps PASSED [ 53%]
+tests/pythia/test_registry.py::test_registry_resolves_pythia_and_polypythia PASSED [ 55%]
+tests/pythia/test_registry.py::test_revision_rejects_noncanonical_step PASSED [ 57%]
+tests/pythia/test_state_layout.py::test_layout_partitions_three_state_components PASSED [ 59%]
+tests/pythia/test_variance.py::test_variance_decomposition_nonnegative PASSED [ 61%]
+tests/test_checkpoint_revision_resolution.py::test_final_step_resolves_to_main_when_native_ref_is_absent PASSED [ 63%]
+tests/test_checkpoint_revision_resolution.py::test_actual_step_ref_is_preferred_when_exposed PASSED [ 65%]
+tests/test_checkpoint_revision_resolution.py::test_missing_intermediate_native_revision_fails_closed PASSED [ 67%]
+tests/test_families.py::test_singular_channel_family_preserves_block_singular_values PASSED [ 69%]
+tests/test_notebook_bootstrap.py::test_colab_bootstraps_make_src_importable_without_kernel_restart PASSED [ 71%]
+tests/test_perturbations.py::test_phase_rotation_preserves_magnitude PASSED [ 73%]
+tests/test_perturbations.py::test_phase_perturbation_norm_matches_matrix_norm PASSED [ 75%]
+tests/test_perturbations.py::test_real_pair_rotation_preserves_joint_norm PASSED [ 76%]
+tests/test_perturbations.py::test_block_phase_preserves_singular_values PASSED [ 78%]
+tests/test_plot_labels.py::test_pythia_block_name_is_compacted_semantically PASSED [ 80%]
+tests/test_plot_labels.py::test_shared_block_uses_component_only_axis_labels PASSED [ 82%]
+tests/test_plot_labels.py::test_mixed_blocks_keep_compact_block_identity PASSED [ 84%]
+tests/test_projection.py::test_dense_projection PASSED                   [ 86%]
+tests/test_projection.py::test_arnoldi_projection_shapes PASSED          [ 88%]
+tests/test_seed_study_notebook.py::test_seed_study_uses_schema_v2_run_key_and_safe_metric_maxima PASSED [ 90%]
+tests/test_spectra.py::test_two_by_two_matches_closed_form_set PASSED    [ 92%]
+tests/test_spectra.py::test_acyclic_edge_has_no_spectral_motion PASSED   [ 94%]
+tests/test_spectra.py::test_nonnormal_matrix_can_have_transient_gain_above_one PASSED [ 96%]
+tests/test_spectra.py::test_diagonal_unitary_similarity_preserves_spectrum PASSED [ 98%]
+tests/test_spectra.py::test_trace_moment_harmonic_matches_closed_walk_count PASSED [100%]
+
+=================================== FAILURES ===================================
+________________ test_rejects_optimizer_group_capacity_mismatch ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-runner/pytest-0/test_rejects_optimizer_group_c0')
+
+    def test_rejects_optimizer_group_capacity_mismatch(tmp_path):
+        shapes = OrderedDict(
+            [
+                ("linear.weight", (2, 3)),
+                ("linear.bias", (2,)),
+                ("norm.weight", (2,)),
+            ]
+        )
+        decay_w = torch.arange(1.0, 7.0)
+        no_decay_w = torch.arange(7.0, 11.0)
+        decay_m = torch.arange(1.0, 7.0)
+        no_decay_m = torch.arange(7.0, 11.0)
+        _save_two_group_checkpoint(
+            tmp_path,
+            decay_w=decay_w,
+            no_decay_w=no_decay_w,
+            decay_m=decay_m,
+            no_decay_m=no_decay_m,
+        )
+    
+        wrong_shapes = OrderedDict(shapes)
+        wrong_shapes["extra.weight"] = (3, 3)
+        references = {
+            name: {"l2": 1.0, "l1": 1.0}
+            for name in wrong_shapes
+        }
+    
+>       with pytest.raises(ValueError, match="does not fit the native optimizer moment groups"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'does not fit the native optimizer moment groups'
+E         Actual message: "native Adam groups do not identify a unique GPT-NeoX decay/no-decay ordering: observed=[6, 4], candidate sizes={'weight_decay_then_no_decay': [15, 4], 'no_decay_then_weight_decay': [4, 15]}"
+
+tests/pythia/test_native_optimizer_groups.py:131: AssertionError
+=============================== warnings summary ===============================
+tests/pythia/test_functional_adamw.py: 18 warnings
+  /opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages/torch/jit/_script.py:1488: DeprecationWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/pythia/test_native_optimizer_groups.py::test_rejects_optimizer_group_capacity_mismatch - AssertionError: Regex pattern did not match.
+  Expected regex: 'does not fit the native optimizer moment groups'
+  Actual message: "native Adam groups do not identify a unique GPT-NeoX decay/no-decay ordering: observed=[6, 4], candidate sizes={'weight_decay_then_no_decay': [15, 4], 'no_decay_then_weight_decay': [4, 15]}"
+================== 1 failed, 51 passed, 18 warnings in 3.67s ===================
