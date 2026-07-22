@@ -7,6 +7,8 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from .plot_labels import compact_basis_labels
+
 
 def _display_markdown(text: str) -> None:
     try:
@@ -89,6 +91,7 @@ def display_probe_summary(root: str | Path, *, top_n: int = 8) -> dict[str, Any]
     records = json.loads((root / "couplings.json").read_text(encoding="utf-8"))
     basis = json.loads((root / "basis.json").read_text(encoding="utf-8"))
     matrix = np.load(root / "reduced_operator.npy")
+    labels, full_to_short, shared_block, label_key = compact_basis_labels(basis)
 
     jacobian = manifest.get("jacobian", {})
     fallback = jacobian.get("fallback_used", False)
@@ -108,13 +111,26 @@ def display_probe_summary(root: str | Path, *, top_n: int = 8) -> dict[str, Any]
         f"{backend_note}"
     )
 
+    key_lines = "\n".join(f"- `{short}` — `{full}`" for short, full in label_key)
+    block_note = (
+        f"All displayed modes belong to the compact block **`{shared_block}`**. "
+        if shared_block is not None
+        else "Labels retain compact block identity because several parameter blocks are present. "
+    )
+    _display_markdown(
+        "### Basis-label key\n\n"
+        + block_note
+        + "The evidence packet retains the exact basis names.\n\n"
+        + key_lines
+    )
+
     rows = []
     for record in records:
         metrics = record["metrics"]
         rows.append(
             {
-                "source": record["source"],
-                "target": record["target"],
+                "source": full_to_short.get(record["source"], record["source"]),
+                "target": full_to_short.get(record["target"], record["target"]),
                 "|coupling|": record["magnitude"],
                 "max spectral radius": metrics["spectral_radius_max"],
                 "finite-horizon gain": metrics["finite_horizon_gain"],
@@ -135,16 +151,30 @@ def display_probe_summary(root: str | Path, *, top_n: int = 8) -> dict[str, Any]
         except ImportError:  # pragma: no cover
             print(frame.head(top_n).to_string(index=False))
 
-    labels = [item["name"] for item in basis]
-    figure, axis = plt.subplots(figsize=(max(6, len(labels) * 0.8), max(5, len(labels) * 0.7)))
+    figure_width = max(6.5, 1.15 * len(labels) + 2.0)
+    figure_height = max(4.8, 0.9 * len(labels) + 1.5)
+    figure, axis = plt.subplots(
+        figsize=(figure_width, figure_height),
+        constrained_layout=True,
+    )
     image = axis.imshow(np.abs(matrix))
-    axis.set_title("Magnitude of the projected optimizer-state Jacobian")
-    axis.set_xlabel("source basis vector")
-    axis.set_ylabel("target basis vector")
-    axis.set_xticks(range(len(labels)), labels, rotation=75, ha="right")
+    title = "Magnitude of the projected optimizer-state Jacobian"
+    if shared_block is not None:
+        title += f"\nBlock: {shared_block}"
+    axis.set_title(title)
+    axis.set_xlabel("source basis mode")
+    axis.set_ylabel("target basis mode")
+    rotation = 0 if max((len(label) for label in labels), default=0) <= 14 else 30
+    horizontal_alignment = "center" if rotation == 0 else "right"
+    axis.set_xticks(
+        range(len(labels)),
+        labels,
+        rotation=rotation,
+        ha=horizontal_alignment,
+    )
     axis.set_yticks(range(len(labels)), labels)
-    figure.colorbar(image, ax=axis, label="|Aᵢⱼ|")
-    figure.tight_layout()
+    axis.tick_params(axis="both", labelsize=9)
+    figure.colorbar(image, ax=axis, label="|Âᵢⱼ|")
     plt.show()
 
     if not frame.empty:
@@ -154,10 +184,11 @@ def display_probe_summary(root: str | Path, *, top_n: int = 8) -> dict[str, Any]
             x="coupling",
             y="max spectral radius",
             legend=False,
-            figsize=(9, max(4, 0.55 * len(plot_frame))),
+            figsize=(8.5, max(4, 0.55 * len(plot_frame))),
         )
         axis.set_title("Worst phase-envelope spectral radius by coupling")
         axis.set_xlabel("maxφ ρ(Aφ)")
+        axis.set_ylabel("directed basis coupling")
         axis.invert_yaxis()
         plt.tight_layout()
         plt.show()
@@ -168,7 +199,8 @@ def display_probe_summary(root: str | Path, *, top_n: int = 8) -> dict[str, Any]
         "2. **Maximum spectral radius** asks how close a phase-rotated coupling can bring the reduced map to expansion.\n"
         "3. **Finite-horizon gain** detects transient amplification that eigenvalues alone can miss.\n"
         "4. **Minimum gap and eigenvalue conditioning** flag mode collisions and fragile eigenvectors.\n"
-        "5. These are local, projected diagnostics. They become optimizer evidence only after prospective prediction and matched continuation tests."
+        "5. Compact labels are presentation aliases only; the manifest and basis registry retain the exact parameter paths.\n"
+        "6. These are local, projected diagnostics. They become optimizer evidence only after prospective prediction and matched continuation tests."
     )
     return {
         "manifest": manifest,
@@ -176,6 +208,7 @@ def display_probe_summary(root: str | Path, *, top_n: int = 8) -> dict[str, Any]
         "basis": basis,
         "matrix": matrix,
         "table": frame,
+        "label_key": label_key,
     }
 
 
