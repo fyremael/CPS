@@ -1,0 +1,214 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /opt/hostedtoolcache/Python/3.12.13/x64/bin/python
+cachedir: .pytest_cache
+rootdir: /home/runner/work/CPS/CPS
+configfile: pyproject.toml
+plugins: cov-7.1.0
+collecting ... collected 6 items
+
+tests/pythia/test_native_single_moment_group.py::test_reconstructs_requested_decay_parameter_from_single_moment_group FAILED [ 16%]
+tests/pythia/test_native_single_moment_group.py::test_fails_closed_when_requested_parameter_has_no_native_moments FAILED [ 33%]
+tests/pythia/test_native_state.py::test_reconstruct_partitioned_adam_state PASSED [ 50%]
+tests/pythia/test_native_state.py::test_reconstructs_when_old_metadata_omits_param_shapes PASSED [ 66%]
+tests/pythia/test_native_state.py::test_rejects_unvalidated_model_parameter_order PASSED [ 83%]
+tests/pythia/test_native_state.py::test_finds_param_shapes_in_optimizer_metadata PASSED [100%]
+
+=================================== FAILURES ===================================
+_____ test_reconstructs_requested_decay_parameter_from_single_moment_group _____
+
+tmp_path = PosixPath('/tmp/pytest-of-runner/pytest-0/test_reconstructs_requested_de0')
+
+    def test_reconstructs_requested_decay_parameter_from_single_moment_group(tmp_path):
+        shapes, references, decay_m = _save_single_moment_group_checkpoint(tmp_path)
+        target = "gpt_neox.layers.0.attention.dense.weight"
+    
+>       state = reconstruct_zero_adam_state(
+            tmp_path,
+            parameter_names=[target],
+            parameter_shapes=shapes,
+            reference_signatures=references,
+        )
+
+tests/pythia/test_native_single_moment_group.py:71: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/cps/pythia/native_state_grouped.py:258: in reconstruct_zero_adam_state
+    param_groups, group_report = _infer_optimizer_shape_groups(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+caller_groups = [OrderedDict({'gpt_neox.layers.0.attention.dense.weight': (2, 3), 'gpt_neox.layers.0.attention.dense.bias': (2,), 'gpt_neox.layers.0.input_layernorm.weight': (2,)})]
+capacities = (6,), partition_count = 2
+
+    def _infer_optimizer_shape_groups(
+        caller_groups: list[OrderedDict[str, tuple[int, ...]]],
+        capacities: tuple[int, ...],
+        *,
+        partition_count: int,
+    ) -> tuple[list[OrderedDict[str, tuple[int, ...]]], dict[str, Any] | None]:
+        """Recover a released packet that exposes only one Adam moment group.
+    
+        The public Pythia-70M packet observed in Colab exposes one flattened moment
+        group of 70,385,664 elements, while the matching Transformers model has
+        70,426,624 parameters. The exact 40,960-element complement is the set of
+        one-dimensional bias and LayerNorm tensors. CPS therefore permits a
+        *partial native-state contract* only when one standard GPT-NeoX parameter
+        class matches the observed capacity uniquely. Requests for uncovered
+        parameters still fail closed.
+        """
+    
+        if len(caller_groups) != 1 or len(capacities) != 1:
+            return _ORIGINAL_INFER(
+                caller_groups,
+                capacities,
+                partition_count=partition_count,
+            )
+    
+        complete = caller_groups[0]
+        decay = OrderedDict(
+            (name, shape)
+            for name, shape in complete.items()
+            if grouped._uses_weight_decay(name, shape)
+        )
+        no_decay = OrderedDict(
+            (name, shape)
+            for name, shape in complete.items()
+            if not grouped._uses_weight_decay(name, shape)
+        )
+    
+        observed = capacities[0]
+        maximum_padding = 2 * partition_count
+    
+        def fits(group: OrderedDict[str, tuple[int, ...]]) -> bool:
+            padding = observed - _numel(group)
+            return 0 <= padding <= maximum_padding
+    
+        if fits(complete):
+            return caller_groups, None
+    
+        candidates: list[
+            tuple[str, OrderedDict[str, tuple[int, ...]], OrderedDict[str, tuple[int, ...]]]
+        ] = []
+        if decay and fits(decay):
+            candidates.append(("weight_decay_only", decay, no_decay))
+        if no_decay and fits(no_decay):
+            candidates.append(("no_decay_only", no_decay, decay))
+    
+        if len(candidates) != 1:
+            sizes = {
+                "complete": _numel(complete),
+                "weight_decay_only": _numel(decay),
+                "no_decay_only": _numel(no_decay),
+            }
+            if not candidates:
+                raise ValueError(
+                    "single native Adam moment group does not match the complete, "
+                    "weight-decay, or no-decay GPT-NeoX parameter contract: "
+                    f"observed={observed}, candidate sizes={sizes}"
+                )
+>           raise ValueError(
+                "single native Adam moment group is ambiguous under the GPT-NeoX "
+                f"parameter contract: observed={observed}, candidate sizes={sizes}"
+            )
+E           ValueError: single native Adam moment group is ambiguous under the GPT-NeoX parameter contract: observed=6, candidate sizes={'complete': 10, 'weight_decay_only': 6, 'no_decay_only': 4}
+
+src/cps/pythia/native_state_packet.py:127: ValueError
+_______ test_fails_closed_when_requested_parameter_has_no_native_moments _______
+
+tmp_path = PosixPath('/tmp/pytest-of-runner/pytest-0/test_fails_closed_when_request0')
+
+    def test_fails_closed_when_requested_parameter_has_no_native_moments(tmp_path):
+        shapes, references, _ = _save_single_moment_group_checkpoint(tmp_path)
+    
+        with pytest.raises(KeyError, match="requested parameters absent from native state"):
+>           reconstruct_zero_adam_state(
+                tmp_path,
+                parameter_names=["gpt_neox.layers.0.attention.dense.bias"],
+                parameter_shapes=shapes,
+                reference_signatures=references,
+            )
+
+tests/pythia/test_native_single_moment_group.py:95: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/cps/pythia/native_state_grouped.py:258: in reconstruct_zero_adam_state
+    param_groups, group_report = _infer_optimizer_shape_groups(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+caller_groups = [OrderedDict({'gpt_neox.layers.0.attention.dense.weight': (2, 3), 'gpt_neox.layers.0.attention.dense.bias': (2,), 'gpt_neox.layers.0.input_layernorm.weight': (2,)})]
+capacities = (6,), partition_count = 2
+
+    def _infer_optimizer_shape_groups(
+        caller_groups: list[OrderedDict[str, tuple[int, ...]]],
+        capacities: tuple[int, ...],
+        *,
+        partition_count: int,
+    ) -> tuple[list[OrderedDict[str, tuple[int, ...]]], dict[str, Any] | None]:
+        """Recover a released packet that exposes only one Adam moment group.
+    
+        The public Pythia-70M packet observed in Colab exposes one flattened moment
+        group of 70,385,664 elements, while the matching Transformers model has
+        70,426,624 parameters. The exact 40,960-element complement is the set of
+        one-dimensional bias and LayerNorm tensors. CPS therefore permits a
+        *partial native-state contract* only when one standard GPT-NeoX parameter
+        class matches the observed capacity uniquely. Requests for uncovered
+        parameters still fail closed.
+        """
+    
+        if len(caller_groups) != 1 or len(capacities) != 1:
+            return _ORIGINAL_INFER(
+                caller_groups,
+                capacities,
+                partition_count=partition_count,
+            )
+    
+        complete = caller_groups[0]
+        decay = OrderedDict(
+            (name, shape)
+            for name, shape in complete.items()
+            if grouped._uses_weight_decay(name, shape)
+        )
+        no_decay = OrderedDict(
+            (name, shape)
+            for name, shape in complete.items()
+            if not grouped._uses_weight_decay(name, shape)
+        )
+    
+        observed = capacities[0]
+        maximum_padding = 2 * partition_count
+    
+        def fits(group: OrderedDict[str, tuple[int, ...]]) -> bool:
+            padding = observed - _numel(group)
+            return 0 <= padding <= maximum_padding
+    
+        if fits(complete):
+            return caller_groups, None
+    
+        candidates: list[
+            tuple[str, OrderedDict[str, tuple[int, ...]], OrderedDict[str, tuple[int, ...]]]
+        ] = []
+        if decay and fits(decay):
+            candidates.append(("weight_decay_only", decay, no_decay))
+        if no_decay and fits(no_decay):
+            candidates.append(("no_decay_only", no_decay, decay))
+    
+        if len(candidates) != 1:
+            sizes = {
+                "complete": _numel(complete),
+                "weight_decay_only": _numel(decay),
+                "no_decay_only": _numel(no_decay),
+            }
+            if not candidates:
+                raise ValueError(
+                    "single native Adam moment group does not match the complete, "
+                    "weight-decay, or no-decay GPT-NeoX parameter contract: "
+                    f"observed={observed}, candidate sizes={sizes}"
+                )
+>           raise ValueError(
+                "single native Adam moment group is ambiguous under the GPT-NeoX "
+                f"parameter contract: observed={observed}, candidate sizes={sizes}"
+            )
+E           ValueError: single native Adam moment group is ambiguous under the GPT-NeoX parameter contract: observed=6, candidate sizes={'complete': 10, 'weight_decay_only': 6, 'no_decay_only': 4}
+
+src/cps/pythia/native_state_packet.py:127: ValueError
+=========================== short test summary info ============================
+FAILED tests/pythia/test_native_single_moment_group.py::test_reconstructs_requested_decay_parameter_from_single_moment_group - ValueError: single native Adam moment group is ambiguous under the GPT-NeoX parameter contract: observed=6, candidate sizes={'complete': 10, 'weight_decay_only': 6, 'no_decay_only': 4}
+FAILED tests/pythia/test_native_single_moment_group.py::test_fails_closed_when_requested_parameter_has_no_native_moments - ValueError: single native Adam moment group is ambiguous under the GPT-NeoX parameter contract: observed=6, candidate sizes={'complete': 10, 'weight_decay_only': 6, 'no_decay_only': 4}
+========================= 2 failed, 4 passed in 2.08s ==========================
