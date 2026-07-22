@@ -1,0 +1,48 @@
+exit_status=1
+.............................F.                                          [100%]
+=================================== FAILURES ===================================
+_____________ test_diagonal_unitary_similarity_preserves_spectrum ______________
+
+    def test_diagonal_unitary_similarity_preserves_spectrum():
+        a = np.array(
+            [[0.5, 0.7, 0.0], [0.0, 0.6, 0.8], [0.4, 0.0, 0.7]], dtype=complex
+        )
+        phases = np.array([0.2, -0.4, 0.9])
+        d = np.diag(np.exp(1j * phases))
+        b = d @ a @ np.linalg.inv(d)
+>       assert np.allclose(np.sort_complex(np.linalg.eigvals(a)), np.sort_complex(np.linalg.eigvals(b)))
+E       AssertionError: assert False
+E        +  where False = <function allclose at 0x7fa040d72ff0>(array([0.29359687-5.21199228e-01j, 0.29359687+5.21199228e-01j,\n       1.21280626+2.22044605e-16j]), array([0.29359687+5.21199228e-01j, 0.29359687-5.21199228e-01j,\n       1.21280626-1.11022302e-16j]))
+E        +    where <function allclose at 0x7fa040d72ff0> = np.allclose
+E        +    and   array([0.29359687-5.21199228e-01j, 0.29359687+5.21199228e-01j,\n       1.21280626+2.22044605e-16j]) = <function sort_complex at 0x7fa02a513470>(array([1.21280626+2.22044605e-16j, 0.29359687+5.21199228e-01j,\n       0.29359687-5.21199228e-01j]))
+E        +      where <function sort_complex at 0x7fa02a513470> = np.sort_complex
+E        +      and   array([1.21280626+2.22044605e-16j, 0.29359687+5.21199228e-01j,\n       0.29359687-5.21199228e-01j]) = <function eigvals at 0x7fa040e3ec30>(array([[0.5+0.j, 0.7+0.j, 0. +0.j],\n       [0. +0.j, 0.6+0.j, 0.8+0.j],\n       [0.4+0.j, 0. +0.j, 0.7+0.j]]))
+E        +        where <function eigvals at 0x7fa040e3ec30> = <module 'numpy.linalg' from '/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages/numpy/linalg/__init__.py'>.eigvals
+E        +          where <module 'numpy.linalg' from '/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages/numpy/linalg/__init__.py'> = np.linalg
+E        +    and   array([0.29359687+5.21199228e-01j, 0.29359687-5.21199228e-01j,\n       1.21280626-1.11022302e-16j]) = <function sort_complex at 0x7fa02a513470>(array([1.21280626-1.11022302e-16j, 0.29359687-5.21199228e-01j,\n       0.29359687+5.21199228e-01j]))
+E        +      where <function sort_complex at 0x7fa02a513470> = np.sort_complex
+E        +      and   array([1.21280626-1.11022302e-16j, 0.29359687-5.21199228e-01j,\n       0.29359687+5.21199228e-01j]) = <function eigvals at 0x7fa040e3ec30>(array([[0.5       +1.38777878e-17j, 0.57773493+3.95249731e-01j,\n        0.        +0.00000000e+00j],\n       [0.       ...7.70846548e-01j],\n       [0.30593687+2.57687075e-01j, 0.        +0.00000000e+00j,\n        0.7       +0.00000000e+00j]]))
+E        +        where <function eigvals at 0x7fa040e3ec30> = <module 'numpy.linalg' from '/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages/numpy/linalg/__init__.py'>.eigvals
+E        +          where <module 'numpy.linalg' from '/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages/numpy/linalg/__init__.py'> = np.linalg
+
+tests/test_spectra.py:39: AssertionError
+=============================== warnings summary ===============================
+tests/pythia/test_functional_adamw.py: 18 warnings
+  /opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages/torch/jit/_script.py:1488: DeprecationWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_spectra.py::test_diagonal_unitary_similarity_preserves_spectrum - AssertionError: assert False
+ +  where False = <function allclose at 0x7fa040d72ff0>(array([0.29359687-5.21199228e-01j, 0.29359687+5.21199228e-01j,\n       1.21280626+2.22044605e-16j]), array([0.29359687+5.21199228e-01j, 0.29359687-5.21199228e-01j,\n       1.21280626-1.11022302e-16j]))
+ +    where <function allclose at 0x7fa040d72ff0> = np.allclose
+ +    and   array([0.29359687-5.21199228e-01j, 0.29359687+5.21199228e-01j,\n       1.21280626+2.22044605e-16j]) = <function sort_complex at 0x7fa02a513470>(array([1.21280626+2.22044605e-16j, 0.29359687+5.21199228e-01j,\n       0.29359687-5.21199228e-01j]))
+ +      where <function sort_complex at 0x7fa02a513470> = np.sort_complex
+ +      and   array([1.21280626+2.22044605e-16j, 0.29359687+5.21199228e-01j,\n       0.29359687-5.21199228e-01j]) = <function eigvals at 0x7fa040e3ec30>(array([[0.5+0.j, 0.7+0.j, 0. +0.j],\n       [0. +0.j, 0.6+0.j, 0.8+0.j],\n       [0.4+0.j, 0. +0.j, 0.7+0.j]]))
+ +        where <function eigvals at 0x7fa040e3ec30> = <module 'numpy.linalg' from '/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages/numpy/linalg/__init__.py'>.eigvals
+ +          where <module 'numpy.linalg' from '/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages/numpy/linalg/__init__.py'> = np.linalg
+ +    and   array([0.29359687+5.21199228e-01j, 0.29359687-5.21199228e-01j,\n       1.21280626-1.11022302e-16j]) = <function sort_complex at 0x7fa02a513470>(array([1.21280626-1.11022302e-16j, 0.29359687-5.21199228e-01j,\n       0.29359687+5.21199228e-01j]))
+ +      where <function sort_complex at 0x7fa02a513470> = np.sort_complex
+ +      and   array([1.21280626-1.11022302e-16j, 0.29359687-5.21199228e-01j,\n       0.29359687+5.21199228e-01j]) = <function eigvals at 0x7fa040e3ec30>(array([[0.5       +1.38777878e-17j, 0.57773493+3.95249731e-01j,\n        0.        +0.00000000e+00j],\n       [0.       ...7.70846548e-01j],\n       [0.30593687+2.57687075e-01j, 0.        +0.00000000e+00j,\n        0.7       +0.00000000e+00j]]))
+ +        where <function eigvals at 0x7fa040e3ec30> = <module 'numpy.linalg' from '/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages/numpy/linalg/__init__.py'>.eigvals
+ +          where <module 'numpy.linalg' from '/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/site-packages/numpy/linalg/__init__.py'> = np.linalg
