@@ -21,13 +21,31 @@ jobs:
       - name: Apply patch
         run: python scripts/apply_native_shape_fallback_patch.py
 
-      - name: Validate
-        shell: bash
+      - name: Install
         run: |
-          set -o pipefail
           python -m pip install -q --upgrade pip
           python -m pip install -q -e '.[dev,notebooks]'
-          pytest -q 2>&1 | tee /tmp/pytest.log
+
+      - name: Validate native reconstruction tests
+        shell: bash
+        run: |
+          set +e
+          pytest -q tests/pythia/test_native_state.py -x --tb=short > /tmp/native-tests.log 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            mkdir -p diagnostics
+            cp /tmp/native-tests.log diagnostics/native-shape-fallback-failure.log
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "Capture native shape fallback test failure"
+            git push origin HEAD:${{ github.head_ref }}
+            exit "$status"
+          fi
+
+      - name: Validate repository
+        run: |
+          pytest -q
           python scripts/validate_notebooks.py
           python -m compileall -q src scripts tests
           python -m pip install -q build
