@@ -24,3 +24,11 @@ Every run writes:
 - `couplings.json`: ranked coupling-phase measurements.
 
 No intervention claim is accepted without a matched continuation run on the same subsequent token sequence.
+
+## Attention and JVP backend contract
+
+The default real-model probe uses eager attention so the exact `torch.func.jvp` path does not enter PyTorch's fused efficient-SDPA kernel, which may lack forward-mode AD. A preflight is mandatory. The manifest records `attention.requested_implementation`, `attention.active_implementation`, and the complete `jacobian` backend diagnostic. A finite-difference fallback is admissible for instrument development only when it is declared and its step-size sensitivity is checked.
+
+## Notebook presentation contract
+
+Pythia notebooks are part of the scientific artifact. They must teach the experiment while running: announce each stage, explain why it exists, report progress and backend provenance, display projection closure together with phase metrics, and state what the result does not establish. Cleared-output validation remains mandatory before commit.

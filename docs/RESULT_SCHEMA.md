@@ -9,6 +9,8 @@ Required fields:
 - selected parameter names and total element count;
 - state dimension and basis rank;
 - projection closure diagnostics and JVP norms;
+- requested and active attention implementations;
+- requested and effective JVP modes/backends, fallback flag, fallback reason, and preflight norm;
 - native-state evidence class and source files;
 - full run configuration;
 - Python, PyTorch, device and dtype metadata;
@@ -25,3 +27,21 @@ Each record declares source and target basis coordinates, nominal coupling magni
 ## Versioning
 
 Fields may be added within a schema version. Removing or changing the meaning of a field requires a new `schema_version` and a migration note.
+
+### Schema version 2 additions
+
+`manifest.json` now contains:
+
+```text
+attention.requested_implementation
+attention.active_implementation
+jacobian.requested_mode
+jacobian.requested_backend
+jacobian.effective_mode
+jacobian.effective_backend
+jacobian.fallback_used
+jacobian.fallback_reason
+jacobian.preflight_norm
+```
+
+These fields prevent an eager-forward-AD run and a centered finite-difference fallback from being pooled as though they measured the reduced operator by the same numerical method.

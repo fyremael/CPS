@@ -1,7 +1,19 @@
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 
 from cps.metrics import finite_horizon_gain
 from cps.spectra import spectral_sweep
+
+
+def _assert_same_eigenvalue_multiset(actual, expected, *, atol=1e-10, rtol=1e-8):
+    """Compare unordered spectra without relying on floating-point sort tie-breaks."""
+
+    actual = np.asarray(actual, dtype=complex)
+    expected = np.asarray(expected, dtype=complex)
+    assert actual.shape == expected.shape
+    costs = np.abs(actual[:, None] - expected[None, :])
+    rows, cols = linear_sum_assignment(costs)
+    assert np.allclose(actual[rows], expected[cols], atol=atol, rtol=rtol)
 
 
 def test_two_by_two_matches_closed_form_set():
@@ -14,7 +26,7 @@ def test_two_by_two_matches_closed_form_set():
             (a[0, 0] + a[1, 1] + np.sqrt(discriminant)) / 2,
             (a[0, 0] + a[1, 1] - np.sqrt(discriminant)) / 2,
         ])
-        assert np.allclose(np.sort_complex(values), np.sort_complex(expected))
+        _assert_same_eigenvalue_multiset(values, expected)
 
 
 def test_acyclic_edge_has_no_spectral_motion():
@@ -36,7 +48,7 @@ def test_diagonal_unitary_similarity_preserves_spectrum():
     phases = np.array([0.2, -0.4, 0.9])
     d = np.diag(np.exp(1j * phases))
     b = d @ a @ np.linalg.inv(d)
-    assert np.allclose(np.sort_complex(np.linalg.eigvals(a)), np.sort_complex(np.linalg.eigvals(b)))
+    _assert_same_eigenvalue_multiset(np.linalg.eigvals(a), np.linalg.eigvals(b))
 
 
 def test_trace_moment_harmonic_matches_closed_walk_count():

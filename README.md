@@ -85,6 +85,13 @@ The official Google Colab CLI can provision accelerators and execute notebooks d
 
 The wrapper always exports the Colab execution log, retrieves `/content/cps-export`, and tears down the runtime.
 
+
+## Notebook pedagogy and live execution
+
+The seven Colab notebooks are written as executable lessons rather than opaque launchers. They show the resolved configuration, runtime inventory, evidence boundary, active attention and JVP backends, per-column projection progress, coupling-sweep progress, result tables, diagnostic figures, and artifact locations. The same line-oriented progress stream is preserved by `colab-cli log`, making long remote runs auditable while they execute.
+
+The Pythia-70M notebook also explains the fused-SDPA forward-AD limitation and displays whether the run used exact `torch.func.jvp` or the declared centered finite-difference fallback.
+
 ## Native optimizer states
 
 Download the raw checkpoint files required for moment reconstruction:
@@ -167,7 +174,9 @@ CPS is falsifiable. It must add held-out predictive value beyond gradient norms,
 
 - Native checkpoints can approach gigabytes even at 70M scale; use explicit caches and quotas.
 - Autodiff JVPs differentiate through the gradient and can be memory-intensive. Start with one matrix block and rank 3–4.
-- Finite-difference JVPs are slower but provide an independent check.
+- Pythia probes request `attention_implementation: eager` because PyTorch fused efficient-SDPA kernels may not implement forward AD.
+- `jacobian.autodiff_backend: auto` performs a preflight and records a centered finite-difference fallback rather than failing midway through projection.
+- Finite-difference JVPs are slower and approximate; the effective backend and fallback reason are written to `manifest.json`.
 - Do not commit downloaded model or optimizer checkpoints.
 - Every Colab campaign must stop its runtime after artifact retrieval.
 

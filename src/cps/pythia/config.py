@@ -16,6 +16,7 @@ class ModelConfig:
     device: str = "auto"
     dtype: str = "float32"
     trust_remote_code: bool = False
+    attention_implementation: str = "eager"
     cache_dir: str = ".cache/huggingface"
 
 
@@ -67,6 +68,8 @@ class BasisConfig:
 @dataclass(frozen=True)
 class JacobianConfig:
     mode: str = "autodiff"
+    autodiff_backend: str = "auto"
+    fallback_to_finite_difference: bool = True
     finite_difference_relative_step: float = 1e-4
     finite_difference_absolute_floor: float = 1e-6
     closure_residual: bool = True
@@ -86,6 +89,7 @@ class SweepConfig:
 class OutputConfig:
     root: str = "artifacts/pythia"
     run_name: str = "probe"
+    verbose: bool = True
     save_reduced_operator: bool = True
     save_trajectories: bool = True
 

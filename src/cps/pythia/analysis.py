@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Sequence
 
 import numpy as np
 
@@ -51,10 +51,12 @@ def analyze_reduced_operator(
     finite_horizon: int,
     compute_kreiss: bool,
     maximum_couplings: int,
+    progress: Callable[[int, int, CouplingRecord], None] | None = None,
 ) -> tuple[CouplingRecord, ...]:
     phases = np.linspace(0.0, 2.0 * np.pi, phase_count)
     records: list[CouplingRecord] = []
-    for row, col in select_couplings(matrix, maximum_couplings):
+    selected = select_couplings(matrix, maximum_couplings)
+    for row, col in selected:
         family, metadata = singular_channel_family(matrix, [row], [col], channel=0)
         sweep = sweep_matrix_family(
             family,
@@ -64,17 +66,18 @@ def analyze_reduced_operator(
             compute_kreiss=compute_kreiss,
             metadata=metadata,
         )
-        records.append(
-            CouplingRecord(
-                row=row,
-                col=col,
-                source=basis[col].name,
-                target=basis[row].name,
-                magnitude=float(abs(matrix[row, col])),
-                metrics=sweep.metrics.to_dict(),
-                family_metadata=metadata,
-            )
+        record = CouplingRecord(
+            row=row,
+            col=col,
+            source=basis[col].name,
+            target=basis[row].name,
+            magnitude=float(abs(matrix[row, col])),
+            metrics=sweep.metrics.to_dict(),
+            family_metadata=metadata,
         )
+        records.append(record)
+        if progress is not None:
+            progress(len(records), len(selected), record)
     return tuple(records)
 
 
