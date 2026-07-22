@@ -1,0 +1,98 @@
+name: Apply native reader direct binding
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply direct binding
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          runner_path = Path('src/cps/pythia/runner.py')
+          runner = runner_path.read_text()
+          old = 'from .native_state import parameter_reference_signatures, reconstruct_zero_adam_state\n'
+          new = (
+              'from .native_state import parameter_reference_signatures\n'
+              'from .native_state_packet import reconstruct_zero_adam_state\n'
+          )
+          if old not in runner:
+              raise SystemExit('runner native-state import anchor not found')
+          runner_path.write_text(runner.replace(old, new, 1))
+
+          notebook_path = Path('notebooks/04_native_optimizer_state.ipynb')
+          notebook = json.loads(notebook_path.read_text())
+          for cell in notebook['cells']:
+              if cell.get('id') == '0c8e3273-md':
+                  cell['source'] = [
+                      '## Stage 2 — bind and validate the native moments\n',
+                      '\n',
+                      'The optimizer step number is derived from the semantic checkpoint revision. Historical GPT-NeoX packets vary in metadata and optimizer-state layout. The execution cell binds the packet-aware reader directly into the runner, prints the active reader module, and refuses to proceed if an older cached binding remains. When `param_shapes` are absent, CPS validates the proposed Transformers parameter order against native fp32 signatures before assigning names.\n',
+                  ]
+              if cell.get('id') == '1bbe7da6':
+                  cell['source'] = [
+                      'import importlib\n',
+                      'import cps.pythia.native_state_packet as native_packet\n',
+                      'import cps.pythia.runner as pythia_runner\n',
+                      '\n',
+                      '# Colab keeps imported modules alive across git pulls. Reload the packet\n',
+                      '# reader and bind it explicitly so a stale runner cannot silently select\n',
+                      '# the older complete-group reconstruction path.\n',
+                      'native_packet = importlib.reload(native_packet)\n',
+                      'pythia_runner.reconstruct_zero_adam_state = native_packet.reconstruct_zero_adam_state\n',
+                      'reader = pythia_runner.reconstruct_zero_adam_state\n',
+                      'print(f"[NATIVE] active reader={reader.__module__}.{reader.__name__}", flush=True)\n',
+                      'if reader is not native_packet.reconstruct_zero_adam_state:\n',
+                      '    raise RuntimeError("packet-aware native reader was not bound into the runner")\n',
+                      '\n',
+                      'print("[NATIVE] Reconstructing Adam moments from ZeRO partitions.", flush=True)\n',
+                      'print("[NATIVE] The reader will classify complete, decay-only, or no-decay-only coverage", flush=True)\n',
+                      'print("[NATIVE] and will fail closed for selected parameters outside the visible packet.", flush=True)\n',
+                      'output = pythia_runner.run_probe(config)\n',
+                      'print(f"[NATIVE] evidence root={output}", flush=True)\n',
+                  ]
+          notebook_path.write_text(json.dumps(notebook, indent=1) + '\n')
+
+          test_path = Path('tests/pythia/test_native_reader_binding.py')
+          test_path.write_text('''from cps.pythia import runner\nfrom cps.pythia.native_state_packet import reconstruct_zero_adam_state\n\n\ndef test_runner_binds_packet_aware_native_reader_directly():\n    assert runner.reconstruct_zero_adam_state is reconstruct_zero_adam_state\n    assert runner.reconstruct_zero_adam_state.__module__ == "cps.pythia.native_state_grouped"\n''')
+
+          pyproject = Path('pyproject.toml')
+          text = pyproject.read_text()
+          if 'version = "0.2.8"' not in text:
+              raise SystemExit('expected version 0.2.8')
+          pyproject.write_text(text.replace('version = "0.2.8"', 'version = "0.2.9"', 1))
+          PY
+      - name: Install and validate
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev,notebooks]'
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pytest -q
+          python scripts/validate_notebooks.py
+          python -m compileall -q src scripts tests
+          python -m pip install build
+          python -m build
+      - name: Commit implementation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/cps/pythia/runner.py notebooks/04_native_optimizer_state.ipynb tests/pythia/test_native_reader_binding.py pyproject.toml
+          git commit -m 'Bind packet-aware native reader directly in runner and notebook'
+          git push origin HEAD:${{ github.head_ref }}
