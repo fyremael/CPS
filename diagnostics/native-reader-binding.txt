@@ -1,0 +1,25 @@
+=== TESTS ===
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /opt/hostedtoolcache/Python/3.12.13/x64/bin/python
+cachedir: .pytest_cache
+rootdir: /home/runner/work/CPS/CPS
+configfile: pyproject.toml
+testpaths: tests
+plugins: cov-7.1.0, anyio-4.14.2
+collecting ... collected 47 items / 1 error
+
+==================================== ERRORS ====================================
+________________ ERROR collecting tests/pythia/test_variance.py ________________
+ImportError while importing test module '/home/runner/work/CPS/CPS/tests/pythia/test_variance.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/pythia/test_variance.py:1: in <module>
+    import pandas as pd
+E   ModuleNotFoundError: No module named 'pandas'
+=========================== short test summary info ============================
+ERROR tests/pythia/test_variance.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+=============================== 1 error in 1.68s ===============================
