@@ -5,6 +5,10 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 from . import native_state as legacy
+from .native_name_alignment import (
+    apply_name_transform,
+    resolve_requested_parameter_names,
+)
 
 
 def _tensor_leaves(
@@ -321,6 +325,10 @@ def reconstruct_zero_adam_state(
 
     import torch
 
+    requested_names = (
+        None if parameter_names is None else tuple(dict.fromkeys(parameter_names))
+    )
+
     root = Path(checkpoint_dir)
     optimizer_files = tuple(
         sorted(
@@ -438,6 +446,24 @@ def reconstruct_zero_adam_state(
         if group_report is not None:
             validation["optimizer_groups"] = group_report
 
+    alignment = resolve_requested_parameter_names(
+        requested_names,
+        param_groups,
+        parameter_shapes,
+    )
+    if requested_names is not None:
+        validation["name_alignment"] = alignment.report
+    requested_native = (
+        None
+        if requested_names is None
+        else set(alignment.requested_to_native.values())
+    )
+    requested_output = None if requested_names is None else set(requested_names)
+    native_to_requested = {
+        native_name: requested_name
+        for requested_name, native_name in alignment.requested_to_native.items()
+    }
+
     group_count = len(param_groups)
     if any(len(groups) < group_count for groups in avg_by_rank + sq_by_rank):
         observed = [
@@ -449,7 +475,6 @@ def reconstruct_zero_adam_state(
             f"contract: observed {observed}, expected at least {group_count}"
         )
 
-    requested = None if parameter_names is None else set(parameter_names)
     exp_avg: dict[str, Any] = {}
     exp_avg_sq: dict[str, Any] = {}
     total_parameters = 0
@@ -471,26 +496,31 @@ def reconstruct_zero_adam_state(
         offset = 0
         for name, shape in shapes.items():
             count = legacy._numel(shape)
-            if requested is None or name in requested:
-                exp_avg[name] = (
+            if requested_native is None or name in requested_native:
+                output_name = native_to_requested.get(name, name)
+                transform = alignment.transforms.get(output_name, "identity")
+                native_avg = (
                     flat_avg[offset : offset + count]
                     .reshape(shape)
                     .clone()
                 )
-                exp_avg_sq[name] = (
+                native_sq = (
                     flat_sq[offset : offset + count]
                     .reshape(shape)
                     .clone()
                 )
+                exp_avg[output_name] = apply_name_transform(native_avg, transform)
+                exp_avg_sq[output_name] = apply_name_transform(native_sq, transform)
             offset += count
             total_parameters += count
 
-    if requested is not None:
-        missing = requested - set(exp_avg)
+    if requested_output is not None:
+        missing = requested_output - set(exp_avg)
         if missing:
             raise KeyError(
-                "requested parameters absent from native state: "
-                f"{sorted(missing)}"
+                "requested parameters absent from native state after governed "
+                "name alignment: "
+                f"{sorted(missing)}; alignment={alignment.report}"
             )
 
     return legacy.NativeAdamState(
