@@ -44,6 +44,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add artifacts/ci/pytest-3.12.log
+          git add -f artifacts/ci/pytest-3.12.log
           git commit -m "chore: capture Python 3.12 test failure"
           git push origin HEAD:fix/verbose-notebooks-forward-ad
