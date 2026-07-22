@@ -6,6 +6,7 @@ Required fields:
 
 - `schema_version`;
 - `subject`, `run_spec`, `model_id`, `revision`;
+- `run_spec.key` as the stable registry identifier;
 - selected parameter names and total element count;
 - state dimension and basis rank;
 - projection closure diagnostics and JVP norms;
@@ -15,6 +16,8 @@ Required fields:
 - full run configuration;
 - Python, PyTorch, device and dtype metadata;
 - elapsed time.
+
+`run_spec` may also include `family`, `seed`, `weight_seed`, `data_seed`, and notes. Notebook readers may accept a legacy `run_spec.name` field, but newly written schema-v2 evidence uses `run_spec.key`.
 
 ## `basis.json`
 
