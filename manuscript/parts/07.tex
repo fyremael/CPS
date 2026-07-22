@@ -1,0 +1,95 @@
+The last condition closes the loop between measurement and mechanism.  Without it, a successful intervention may be useful but remains only loosely explained.
+
+\subsection{Evidence classes}
+
+Pythia analyses must distinguish native from reconstructed optimizer moments.  Native moments are historical state.  Reconstructed moments are a controlled approximation, useful for software validation and some comparative studies but not interchangeable with historical replay.  Every artifact manifest therefore declares moment provenance, checkpoint source, selected coordinates, basis construction, projection residuals, batch source, numerical precision, and environment.
+
+The repository includes the complete execution surface for these studies: native-state reconstruction, functional AdamW JVPs, longitudinal runners, grouped prediction, variance decomposition, matched continuations, and Colab harnesses.  At the time of this programme preprint, the Pythia campaigns themselves remain to be executed.  Code is an experimental promise; only immutable run packets constitute evidence.
+
+\section{Relation to existing work}
+
+The proposal joins several lines of work that have usually been developed separately.
+
+Pseudospectral theory explains why non-normal operators can be sensitive and transiently amplifying even when their eigenvalues appear benign \cite{trefethen2005}.  Structured stability analysis restricts perturbations to admissible families and has recently been extended to transient bounds under structured perturbations \cite{guglielmi2024}.  Eigenvalue paths under continuous matrix paths have a general topological and perturbational theory \cite{jankowski2019}.
+
+Optimization research has shown that accelerated methods can exhibit substantial non-normal transients on quadratic problems \cite{mohammadi2021}.  Neural-network training often operates near a sharpness-defined edge of stability \cite{cohen2021}.  Most directly, Ghosh \cite{ghosh2026} formulates non-normal optimizer update operators and demonstrates the diagnostic value of eigenvector conditioning.
+
+The present contribution is the combination of four ingredients:
+\begin{enumerate}[leftmargin=1.7em]
+\item a magnitude-preserving phase-restricted perturbation family;
+\item a cycle and trace-moment interpretation of its response;
+\item matrix-free reduction of the complete optimizer-state Jacobian;
+\item explicit planning contracts for damping, momentum, preconditioning, and block structure.
+\end{enumerate}
+We do not claim that phase sweeps replace full pseudospectra, transient analysis, or direct training experiments.  Their value is as a structured measurement between those levels.
+
+\section{Limitations and adversarial questions}
+
+\subsection{Basis dependence}
+
+A scalar reduced entry is not coordinate invariant.  A dramatic loop in an arbitrary random basis may say little about a physically meaningful optimizer coupling.  This is the central conceptual hazard.
+
+The remedy is not to deny the dependence but to govern it.  Scalar \cps{} is admissible only in a semantically declared basis.  Block singular-channel sweeps and trace-moment features provide stronger alternatives.  Every reported result must include basis perturbation ablations.
+
+\subsection{Complex phases in real systems}
+
+A complex entry rotation is often an analysis continuation rather than a realizable optimizer modification.  For real systems, the programme includes two real alternatives:
+\begin{enumerate}[leftmargin=1.7em]
+\item rotate a pair of real couplings as a two-vector, preserving their joint norm;
+\item rotate singular channels or bases of a real coupling block using orthogonal matrices.
+\end{enumerate}
+Complex continuation remains useful as a compact probe, but causal interventions should be validated with realizable real perturbations.
+
+\subsection{Projection error}
+
+Nonnormal spectral quantities can be highly projection-sensitive.  A low-rank Ritz model can miss important left-right interactions.  Rank convergence, two-sided bases, residuals, and direct short-horizon gain estimates are mandatory safeguards.
+
+\subsection{Local linearization}
+
+A local Jacobian does not govern a large nonlinear excursion indefinitely.  A warning may identify a fragile tangent geometry without predicting the realized trajectory.  This is why the programme separates diagnostic association from intervention causality and includes short-horizon products.
+
+\subsection{Confounding by nominal transient gain}
+
+It may turn out that the nominal \(G(K)\) already captures nearly all useful information.  Then the phase sweep adds cost without value.  This is a primary falsification test, not an inconvenience to be hidden.
+
+\section{Implementation status}
+
+The accompanying repository contains an executable instrument rather than manuscript pseudocode.  The core NumPy/SciPy layer provides scalar and block phase families, eigenpair continuation, transient and resolvent observables, trace-moment spectroscopy, and dense or matrix-free projection.  The PyTorch subject layer adds:
+\begin{itemize}[leftmargin=1.5em]
+\item a typed \((\theta,m,\log(v+\tau))\) state layout;
+\item a differentiable selected-coordinate AdamW map using functional model calls;
+\item automatic-differentiation and centered finite-difference JVP paths;
+\item dimensionless coordinate scaling and semantic probe bases;
+\item projected-operator construction with closure residuals;
+\item native GPT--NeoX ZeRO moment reconstruction and provenance records;
+\item Pythia checkpoint, longitudinal, seed-study, prediction, variance, and continuation runners;
+\item seven Colab notebooks and terminal wrappers for accelerator provisioning, execution logging, artifact retrieval, and cleanup;
+\item unit, structural, notebook, and package-build checks in continuous integration.
+\end{itemize}
+
+The implementation boundary is explicit.  The current neural Jacobian is exact for a declared selected-coordinate AdamW map; it is not yet a distributed full-state Jacobian.  Exact historical continuation additionally requires the original token stream, scheduler state, mixed-precision overflow state, and complete native optimizer state.  Two-sided neural projection, adaptive phase refinement, and realized Shampoo/Muon block interventions remain extensions.
+
+Most importantly, implementation is not empirical validation.  The repository is ready to execute the Pythia ladder, but this version reports only synthetic evidence and instrument tests.  Pythia claims will be added only after the preregistered campaign produces immutable artifacts and survives the measurement, prediction, intervention, and transfer gates.
+
+\section{Conclusion}
+
+Training stability is often discussed as though each quantity acted alone: the largest curvature, the learning rate, the momentum coefficient, the gradient norm.  But an optimizer is a coupled dynamical system.  Its behavior depends not only on how strong the couplings are, but on how their routes combine.
+
+Coupling-Phase Spectroscopy isolates that missing degree of freedom.  It preserves coupling magnitude, varies orientation, and watches the modes, transients, and closed-path signatures respond.  The construction is mathematically modest: a restricted perturbation family, a projected Jacobian, and a set of operator observables.  Its potential utility comes from disciplined placement.  It sits between coarse scalar monitors and expensive full pseudospectral analysis; between post hoc diagnosis and uncontrolled optimizer search.
+
+The decisive test is empirical.  If \cps{} warnings arrive earlier, survive basis and rank ablations, and select interventions that reduce failures under matched compute, the method becomes a practical instrument for optimizer development.  If it does not, the programme has still supplied a clear negative result: phase-structured sensitivity is not an independent source of useful information for training.  Either outcome advances the measurement discipline of optimization.
+
+\appendix
+\section{Reference algorithm}
+
+\noindent\textbf{Input:} checkpoint state \(z_t\), frozen batch and randomness, projection rank \(r\), selected couplings \(\mathcal E\), phase grid \(\Phi\), horizon \(K\).
+
+\begin{enumerate}[leftmargin=1.8em]
+\item Functionalize the optimizer step \(F_t\) over the complete state.
+\item Expose \(v\mapsto J_tv\) by automatic differentiation; verify selected products by centered finite differences.
+\item Construct \(V,W\) and \(\widehat J=W^*J_tV\).  Record orthogonality and Ritz residuals.
+\item For each coupling or block in \(\mathcal E\):
+  \begin{enumerate}[leftmargin=1.5em]
+  \item generate the magnitude-preserving family over \(\Phi\);
+  \item compute eigenpairs and track branches by eigenvector overlap with a Schur fallback near collisions;
+  \item compute \(R\), \(G(K)\), the Kreiss surrogate, minimum gap, condition numbers, loop geometry, and trace-moment harmonics;

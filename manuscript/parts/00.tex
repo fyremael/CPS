@@ -1,0 +1,95 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1.08in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage[nameinlink,noabbrev]{cleveref}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+\definecolor{gclblue}{RGB}{28,58,86}
+\definecolor{gclgray}{RGB}{90,98,106}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=gclblue,
+  citecolor=gclblue,
+  urlcolor=gclblue,
+  pdftitle={Coupling-Phase Spectroscopy},
+  pdfauthor={Grand Challenge Labs}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textsc{Coupling-Phase Spectroscopy}}
+\fancyhead[R]{\small\textsc{Grand Challenge Labs}}
+\fancyfoot[C]{\thepage}
+\setlength{\headheight}{14pt}
+
+\titleformat{\section}{\Large\bfseries\color{gclblue}}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{0.7em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{0.7em}{}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\C}{\mathbb C}
+\newcommand{\R}{\mathbb R}
+\newcommand{\E}{\mathbb E}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\spec}{\sigma}
+\newcommand{\tr}{\operatorname{tr}}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\rank}{\operatorname{rank}}
+\newcommand{\cps}{\textsc{CPS}}
+\newcommand{\norm}[1]{\left\lVert #1\right\rVert}
+\newcommand{\inner}[2]{\left\langle #1,#2\right\rangle}
+
+\title{\vspace{-1.5em}\textbf{Coupling-Phase Spectroscopy}\\[0.35em]
+\large A Structured Pseudospectral Probe for Optimizer Dynamics}
+\author{Grand Challenge Labs\\
+\small Research Programme Preprint}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Training is a dynamical process, yet optimizer diagnostics are usually built from static marginal quantities: gradient norms, curvature extrema, update magnitudes, or the nominal eigenvalues of a local linearization.  These measurements can miss a distinct failure mode.  A non-normal optimizer-state Jacobian may have all eigenvalues inside the unit disk and nevertheless amplify perturbations strongly over the time horizon that matters in practice.  It may also become unstable when the orientation of one coupling changes, even though the coupling strength does not.
+
+We introduce \emph{Coupling-Phase Spectroscopy} (\cps), a structured pseudospectral probe of a projected optimizer-state Jacobian.  For a selected scalar or block coupling, \cps{} preserves its magnitude while rotating its phase or singular channels.  The resulting family reveals spectral migration, transient amplification, eigenvalue conditioning, mode collisions, and cycle-dependent interference.  We define a phase-restricted structured pseudospectrum, prove its containment in the ordinary pseudospectrum, derive the eigenvalue velocity formula, characterize when a coupling can affect the characteristic polynomial, and show that Fourier coefficients of trace moments enumerate closed walks using the probed coupling.  These results explain both the utility and the limitations of the construction.
+
+The diagnostic is designed not merely to observe training but to plan it.  We give contracts for selecting damping, momentum, preconditioners, and optimizer block structure; a matrix-free projection scheme based on optimizer Jacobian-vector products; an experimental programme with falsifiable acceptance criteria; and an executable reference implementation.  Synthetic experiments show why nominal eigenvalues alone are insufficient: isospectral operators can have sharply different finite-horizon reserves, while feedback-cycle phase changes can move modes across the stability boundary.  We further specify Pythia and PolyPythia as a longitudinal laboratory for replicated, checkpoint-resolved tests of prediction and intervention.  \cps{} is proposed as a measurement layer between local operator analysis and auditable optimizer intervention.
+\end{abstract}
+
+\noindent\textbf{Keywords.} optimizer dynamics; non-normal matrices; pseudospectra; transient growth; matrix-free Jacobians; Krylov projection; adaptive optimization; training stability
+
+\tableofcontents
+\newpage
+
+\section{The question behind the construction}
+
+A matrix is not merely a table of numbers.  It is a machine for transmitting influence.  Its diagonal entries describe what each coordinate does to itself; its off-diagonal entries describe what one coordinate does to another.  The eigenvalues summarize the global modes created by all those interactions together.
+
+Suppose one off-diagonal coupling is replaced by another coupling of the same magnitude but a different phase.  The strength has not changed.  Only the way that path interferes with the other paths has changed.  The eigenvalues may then trace loops in the complex plane.  Those loops are not decorative.  They answer a concrete question:
+
+\begin{quote}
+How dependent are the global modes of the system on the orientation of this particular interaction?
+\end{quote}
+
+For training dynamics, the system of interest is the optimizer itself.  Near a checkpoint, one optimizer step defines a local state-transition operator.  Its modes describe locally contracting, expanding, and oscillatory perturbations.  The phase experiment asks whether those modes are robust to uncertainty or redesign in one coupling between parameter or optimizer-state subspaces.

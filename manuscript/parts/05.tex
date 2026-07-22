@@ -1,0 +1,95 @@
+A preconditioner is usually judged by its effect on curvature conditioning.  \cps{} adds a second requirement: it should not create damaging orientation sensitivity in \(PH\) or in the full adaptive-state Jacobian.
+
+For matrix or tensor preconditioners such as Shampoo \cite{gupta2018}, this suggests comparing candidate block structures by the response of cross-block couplings.  The best block partition is not necessarily the most geometrically convenient partition.  It is the one that contains strong fragile interactions while avoiding unnecessary state.
+
+\subsection{Block formation}
+
+Let \(B_a\) and \(B_b\) be parameter or optimizer-state blocks.  Aggregate scalar or singular-channel risks into a block interaction score.  Then:
+\begin{itemize}[leftmargin=1.5em]
+\item merge blocks when cross-coupling risk is high and persistent;
+\item split blocks when cross-coupling is weak but internal risks differ sharply;
+\item reserve two-sided projection for blocks with large left-right asymmetry;
+\item escalate to short-horizon analysis when frozen-step risks vary rapidly across checkpoints.
+\end{itemize}
+
+Every intervention proposal should include the triggering metric, candidate set, predicted effect, projection sensitivity, confidence, and rollback condition.  The planner proposes; the experiment decides.
+
+\section{Synthetic exemplar}
+\label{sec:synthetic}
+
+The reference implementation includes three four-dimensional operators.
+
+The first is a normal diagonal contraction.  The second is upper triangular and has the same diagonal, hence exactly the same eigenvalues, but contains a diamond of two competing paths.  The third adds one feedback edge, closing a directed cycle.
+
+\begin{table}[t]
+\centering
+\caption{Synthetic \cps{} measurements.  The normal and isospectral non-normal operators have the same nominal spectrum.  Their finite-horizon reserves and eigenvalue condition numbers are nevertheless very different.  Adding feedback makes the phase sweep move eigenvalues and cross the unit circle.}
+\label{tab:synthetic}
+\begin{tabular}{lrrrr}
+\toprule
+Operator & $\max_\phi\rho$ & $G(20)$ & $\max\kappa(\lambda)$ & loop displacement\\
+\midrule
+Normal & 0.820 & 1.00 & 1.00 & 0.000\\
+Isospectral non-normal & 0.820 & 7.75 & 87.26 & 0.000\\
+Cycle-coupled & 1.310 & 486.39 & 3.77 & 1.045\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.88\textwidth]{figures/gain_comparison.png}
+\caption{Finite-horizon amplification under a phase sweep.  The isospectral non-normal operator has no eigenvalue motion because the probed edge lies on no directed cycle, yet path interference changes the transient gain.  Closing a feedback cycle produces much larger amplification.}
+\label{fig:gain}
+\end{figure}
+
+The first lesson is negative but important: an eigenvalue loop is not the whole diagnostic.  In the acyclic non-normal operator, the cycle-support criterion forces the spectrum to remain fixed.  Nevertheless the relative phase of two routes into the final coordinate changes their constructive or destructive interference, and therefore changes \(\norm{A^k}\).
+
+The second lesson is that feedback converts path interference into spectral motion.  Once the cycle is closed, rotating one edge changes a cycle product, the characteristic polynomial changes, and the modes migrate through the complex plane.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.67\textwidth]{figures/cycle_trajectory.png}
+\caption{Phase-induced migration of modes for the cycle-coupled operator.  The dashed circle is the discrete-time stability boundary.  The unordered spectrum returns after a complete sweep, although individual branches may permute.}
+\label{fig:trajectory}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.62\textwidth]{figures/risk_heatmap.png}
+\caption{A coupling-risk map for the reduced operator.  The map is the form in which \cps{} becomes a planning tool: it ranks interactions for closer analysis, damping, or block redesign.}
+\label{fig:heatmap}
+\end{figure}
+
+These examples are intentionally small.  Their purpose is not to establish predictive value for neural training.  Their purpose is to verify that the measurement distinguishes three phenomena that standard spectral summaries conflate: normal contraction, non-normal transient amplification, and phase-dependent feedback instability.
+
+\section{Experimental programme}
+
+The central empirical question is not whether \cps{} can produce interesting curves.  It is whether the curves and branch-invariant features predict and prevent failures better than cheaper diagnostics.
+
+\subsection{Stage A: exact systems}
+
+Use quadratic objectives and analytically known optimizer Jacobians.  Verify:
+\begin{enumerate}[leftmargin=1.7em]
+\item the perturbation norm identity and pseudospectral containment;
+\item the eigenvalue velocity formula;
+\item the cycle-support criterion;
+\item gauge invariance of cycle products;
+\item branch tracking through near-collisions;
+\item convergence of projected and dense measurements.
+\end{enumerate}
+
+\subsection{Stage B: small neural systems}
+
+Use MLPs and small CNNs where full or nearly full Jacobians remain accessible.  Compare SGD, momentum, AdamW, and a block preconditioner.  Induce controlled instability by sweeping learning rate, momentum, damping, batch size, and precision.
+
+Primary prediction targets are loss spikes, gradient excursions, skipped mixed-precision steps, optimizer-state spikes, and recovery time after bounded stress injection.
+
+\subsection{Stage C: single-GPU transformer prototype}
+
+Use a 20M--150M decoder-only Transformer on TinyStories or a controlled FineWeb-Edu slice.  Construct rank-32, 64, and 128 projected optimizer-state Jacobians at sparse checkpoints.  Compare AdamW, momentum, a Muon-like matrix optimizer, and Shampoo-like blocks.
+
+The prototype must answer five questions before scale escalation:
+\begin{enumerate}[leftmargin=1.7em]
+\item Are optimizer rankings stable with respect to projection rank and probe seed?
+\item Do \cps{} features add predictive information beyond nominal finite-horizon gain?

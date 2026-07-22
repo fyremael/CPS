@@ -1,0 +1,30 @@
+schema_version: 1
+checkpoint_grid:
+  early: [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+  dense:
+    start: 1000
+    stop: 143000
+    step: 1000
+subjects:
+  development:
+    - pythia-70m
+  replication:
+    - polypythia-70m-seed1
+    - polypythia-70m-seed2
+    - polypythia-70m-seed3
+    - polypythia-70m-seed4
+    - polypythia-70m-seed5
+    - polypythia-70m-seed6
+    - polypythia-70m-seed7
+    - polypythia-70m-seed8
+    - polypythia-70m-seed9
+  causal:
+    - polypythia-160m-w1-d1
+    - polypythia-160m-w1-d2
+    - polypythia-160m-w2-d1
+    - polypythia-160m-w2-d2
+  scale_transfer:
+    - pythia-160m
+    - pythia-410m
+    - pythia-1b
+    - pythia-2.8b

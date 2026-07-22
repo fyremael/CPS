@@ -1,0 +1,36 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+dist/
+build/
+.cache/
+.ipynb_checkpoints/
+
+# Research artifacts
+artifacts/**
+!artifacts/.gitkeep
+*.npy
+*.npz
+*.pt
+*.pth
+*.safetensors
+*.bin
+*.jsonl
+cps-export*
+
+# LaTeX build products
+manuscript/*.aux
+manuscript/*.log
+manuscript/*.out
+manuscript/*.toc
+manuscript/*.fls
+manuscript/*.fdb_latexmk
+
+# Generated manuscript figures
+manuscript/figures/*.png
+!manuscript/figures/.gitkeep
