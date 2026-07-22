@@ -1,0 +1,207 @@
+name: Apply compact notebook labels
+
+on:
+  push:
+    branches: [fix/compact-notebook-labels]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/compact-notebook-labels
+          fetch-depth: 0
+
+      - name: Add compact label utilities
+        run: |
+          cat > src/cps/plot_labels.py <<'PY'
+          from __future__ import annotations
+
+          from collections import Counter
+          from typing import Any, Iterable
+
+          _SUBSCRIPT = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
+
+          _PARAMETER_REPLACEMENTS = (
+              (".attention.query_key_value.weight", ".attn.qkv"),
+              (".attention.dense.weight", ".attn.out"),
+              (".mlp.dense_h_to_4h.weight", ".mlp.up"),
+              (".mlp.dense_4h_to_h.weight", ".mlp.down"),
+              (".input_layernorm.weight", ".ln.in"),
+              (".post_attention_layernorm.weight", ".ln.post"),
+              (".final_layer_norm.weight", ".ln.final"),
+              (".embed_in.weight", ".embed.in"),
+              (".embed_out.weight", ".embed.out"),
+          )
+
+          _COMPONENT_LABELS = {
+              "theta": "θ",
+              "update": "Δθ",
+              "gradient": "g",
+              "moment": "m",
+              "exp_avg": "m",
+              "variance": "v",
+              "exp_avg_sq": "v",
+          }
+
+
+          def compact_parameter_name(name: str) -> str:
+              """Produce a short, architecture-aware block label without losing layer identity."""
+
+              compact = name.removeprefix("module.").removeprefix("gpt_neox.")
+              parts = compact.split(".")
+              if len(parts) >= 3 and parts[0] == "layers" and parts[1].isdigit():
+                  compact = f"L{parts[1]}." + ".".join(parts[2:])
+              for source, target in _PARAMETER_REPLACEMENTS:
+                  compact = compact.replace(source, target)
+              return compact
+
+
+          def compact_component_name(name: str) -> str:
+              if name in _COMPONENT_LABELS:
+                  return _COMPONENT_LABELS[name]
+              if name.startswith("random"):
+                  suffix = name.removeprefix("random")
+                  if suffix.isdigit():
+                      return "r" + suffix.translate(_SUBSCRIPT)
+              return name
+
+
+          def _deduplicate(labels: Iterable[str]) -> list[str]:
+              labels = list(labels)
+              counts = Counter(labels)
+              seen: Counter[str] = Counter()
+              output: list[str] = []
+              for label in labels:
+                  seen[label] += 1
+                  if counts[label] == 1:
+                      output.append(label)
+                  else:
+                      output.append(f"{label}·{seen[label]}")
+              return output
+
+
+          def compact_basis_labels(
+              basis: list[dict[str, Any]],
+          ) -> tuple[list[str], dict[str, str], str | None, list[tuple[str, str]]]:
+              """Return plot labels, full-to-short mapping, shared block, and an exact label key."""
+
+              full_names = [str(item["name"]) for item in basis]
+              parsed: list[tuple[str, str]] = []
+              for full_name in full_names:
+                  parameter, separator, component = full_name.rpartition(":")
+                  if not separator:
+                      parameter, component = full_name, ""
+                  parsed.append(
+                      (compact_parameter_name(parameter), compact_component_name(component))
+                  )
+
+              blocks = [block for block, _ in parsed]
+              components = [component for _, component in parsed]
+              shared_block = blocks[0] if blocks and len(set(blocks)) == 1 and all(components) else None
+
+              if shared_block is not None:
+                  labels = components
+              else:
+                  labels = [
+                      f"{block} · {component}" if component else block
+                      for block, component in parsed
+                  ]
+              labels = _deduplicate(labels)
+              mapping = dict(zip(full_names, labels, strict=True))
+              key = list(zip(labels, full_names, strict=True))
+              return labels, mapping, shared_block, key
+          PY
+
+          cat > tests/test_plot_labels.py <<'PY'
+          from cps.plot_labels import compact_basis_labels, compact_parameter_name
+
+
+          def test_pythia_block_name_is_compacted_semantically():
+              assert (
+                  compact_parameter_name("gpt_neox.layers.0.attention.dense.weight")
+                  == "L0.attn.out"
+              )
+
+
+          def test_shared_block_uses_component_only_axis_labels():
+              basis = [
+                  {"name": "gpt_neox.layers.0.attention.dense.weight:theta"},
+                  {"name": "gpt_neox.layers.0.attention.dense.weight:update"},
+                  {"name": "gpt_neox.layers.0.attention.dense.weight:random0"},
+                  {"name": "gpt_neox.layers.0.attention.dense.weight:random1"},
+              ]
+              labels, mapping, shared_block, key = compact_basis_labels(basis)
+              assert labels == ["θ", "Δθ", "r₀", "r₁"]
+              assert shared_block == "L0.attn.out"
+              assert mapping[basis[1]["name"]] == "Δθ"
+              assert key[0] == ("θ", basis[0]["name"])
+
+
+          def test_mixed_blocks_keep_compact_block_identity():
+              basis = [
+                  {"name": "gpt_neox.layers.0.attention.dense.weight:theta"},
+                  {"name": "gpt_neox.layers.1.mlp.dense_4h_to_h.weight:update"},
+              ]
+              labels, _, shared_block, _ = compact_basis_labels(basis)
+              assert labels == ["L0.attn.out · θ", "L1.mlp.down · Δθ"]
+              assert shared_block is None
+          PY
+
+      - name: Patch notebook presentation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/cps/notebook.py")
+          text = path.read_text(encoding="utf-8")
+
+          import_anchor = "from typing import Any, Iterable\n"
+          import_line = "\nfrom .plot_labels import compact_basis_labels\n"
+          if import_line.strip() not in text:
+              text = text.replace(import_anchor, import_anchor + import_line, 1)
+
+          matrix_anchor = '    matrix = np.load(root / "reduced_operator.npy")\n'
+          matrix_addition = '''    labels, full_to_short, shared_block, label_key = compact_basis_labels(basis)\n    key_lines = "\\n".join(f"- `{short}` — `{full}`" for short, full in label_key)\n    block_note = (\n        f"All displayed modes belong to the compact block **`{shared_block}`**. "\n        if shared_block is not None\n        else "Labels retain compact block identity because several parameter blocks are present. "\n    )\n    _display_markdown(\n        "### Basis-label key\\n\\n"\n        + block_note\n        + "The evidence packet retains the exact basis names.\\n\\n"\n        + key_lines\n    )\n'''
+          if matrix_addition.strip() not in text:
+              text = text.replace(matrix_anchor, matrix_anchor + matrix_addition, 1)
+
+          text = text.replace('                "source": record["source"],\n', '                "source": full_to_short.get(record["source"], record["source"]),\n', 1)
+          text = text.replace('                "target": record["target"],\n', '                "target": full_to_short.get(record["target"], record["target"]),\n', 1)
+
+          old_plot = '''    labels = [item["name"] for item in basis]\n    figure, axis = plt.subplots(figsize=(max(6, len(labels) * 0.8), max(5, len(labels) * 0.7)))\n    image = axis.imshow(np.abs(matrix))\n    axis.set_title("Magnitude of the projected optimizer-state Jacobian")\n    axis.set_xlabel("source basis vector")\n    axis.set_ylabel("target basis vector")\n    axis.set_xticks(range(len(labels)), labels, rotation=75, ha="right")\n    axis.set_yticks(range(len(labels)), labels)\n    figure.colorbar(image, ax=axis, label="|Aᵢⱼ|")\n    figure.tight_layout()\n    plt.show()\n'''
+          new_plot = '''    figure_width = max(6.5, 1.15 * len(labels) + 2.0)\n    figure_height = max(4.8, 0.9 * len(labels) + 1.5)\n    figure, axis = plt.subplots(\n        figsize=(figure_width, figure_height),\n        constrained_layout=True,\n    )\n    image = axis.imshow(np.abs(matrix))\n    title = "Magnitude of the projected optimizer-state Jacobian"\n    if shared_block is not None:\n        title += f"\\nBlock: {shared_block}"\n    axis.set_title(title)\n    axis.set_xlabel("source basis mode")\n    axis.set_ylabel("target basis mode")\n    rotation = 0 if max((len(label) for label in labels), default=0) <= 14 else 30\n    horizontal_alignment = "center" if rotation == 0 else "right"\n    axis.set_xticks(\n        range(len(labels)),\n        labels,\n        rotation=rotation,\n        ha=horizontal_alignment,\n    )\n    axis.set_yticks(range(len(labels)), labels)\n    axis.tick_params(axis="both", labelsize=9)\n    figure.colorbar(image, ax=axis, label="|Âᵢⱼ|")\n    plt.show()\n'''
+          if old_plot not in text:
+              raise RuntimeError("expected heatmap block was not found")
+          text = text.replace(old_plot, new_plot, 1)
+
+          path.write_text(text, encoding="utf-8")
+
+          pyproject = Path("pyproject.toml")
+          project_text = pyproject.read_text(encoding="utf-8")
+          project_text = project_text.replace('version = "0.2.2"', 'version = "0.2.3"', 1)
+          pyproject.write_text(project_text, encoding="utf-8")
+          PY
+
+      - name: Validate
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev,notebooks]'
+          pytest -q
+          python scripts/validate_notebooks.py
+          python -m compileall -q src scripts tests
+
+      - name: Commit implementation
+        run: |
+          rm -f .github/workflows/apply-compact-labels.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Compact notebook basis labels and improve plot layout"
+          git push origin HEAD:fix/compact-notebook-labels
