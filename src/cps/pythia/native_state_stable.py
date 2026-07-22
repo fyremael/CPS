@@ -259,9 +259,9 @@ def _infer_shape_groups(
                 ],
             }
             raise ValueError(
-                "native Adam groups do not identify a unique GPT-NeoX "
-                f"decay/no-decay ordering: observed={list(capacities)}, "
-                f"candidate sizes={candidate_sizes}"
+                "caller model contract does not fit the native optimizer moment groups "
+                "or does not identify a unique GPT-NeoX decay/no-decay ordering: "
+                f"observed={list(capacities)}, candidate sizes={candidate_sizes}"
             )
 
         order, groups, expected = candidates[0]
