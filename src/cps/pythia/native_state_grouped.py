@@ -230,6 +230,25 @@ def reconstruct_zero_adam_state(
         param_groups = legacy._find_param_shapes(optimizer_payloads)
         shape_source = "optimizer_checkpoint_param_shapes"
 
+    # A historical packet can publish a complete one-group param_shapes mapping
+    # while exposing only a filtered Adam moment group. Reconcile every
+    # checkpoint-authored shape contract against the observed moment capacities,
+    # not only the caller-supplied fallback contract. The packet compatibility
+    # layer installs the single-group decay/no-decay classifier used here.
+    if param_groups is not None:
+        param_groups, metadata_group_report = _infer_optimizer_shape_groups(
+            param_groups,
+            avg_capacities,
+            partition_count=len(optimizer_files),
+        )
+        if metadata_group_report is not None:
+            shape_source = f"{shape_source}_reconciled_with_native_moment_capacity"
+            validation = {
+                "method": "checkpoint_metadata_plus_optimizer_group_capacities",
+                "validated": True,
+                "optimizer_groups": metadata_group_report,
+            }
+
     if param_groups is None:
         caller_groups = legacy._caller_shape_groups(parameter_shapes)
         if caller_groups is None:

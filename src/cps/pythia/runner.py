@@ -189,6 +189,24 @@ def run_probe(
                 "native order signature match",
                 f"{native.shape_validation['match_fraction']:.1%}",
             )
+        group_validation = native.shape_validation.get("optimizer_groups")
+        if group_validation is not None:
+            reporter.metric(
+                "native moment coverage",
+                group_validation.get("coverage", group_validation.get("order", "unknown")),
+            )
+            reporter.info(
+                "Native group contract: "
+                f"expected={group_validation.get('expected_group_numel')}; "
+                f"observed={group_validation.get('observed_group_numel')}; "
+                f"padding={group_validation.get('padding_numel')}"
+            )
+            if group_validation.get("partial_native_state"):
+                reporter.warning(
+                    "The released packet exposes a partial native optimizer state; "
+                    f"unavailable={group_validation.get('unavailable_parameter_class')} "
+                    f"({group_validation.get('unavailable_parameter_numel')} parameters)."
+                )
     elif config.state.moment_source not in {"reconstructed", "zero"}:
         raise ValueError(f"unsupported moment_source: {config.state.moment_source}")
     else:
