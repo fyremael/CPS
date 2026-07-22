@@ -3,6 +3,8 @@ name: Apply Colab import bootstrap fix
 on:
   push:
     branches: [fix/colab-import-bootstrap]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
