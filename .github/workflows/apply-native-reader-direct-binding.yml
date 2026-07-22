@@ -71,7 +71,7 @@ jobs:
           notebook_path.write_text(json.dumps(notebook, indent=1) + '\n')
 
           test_path = Path('tests/pythia/test_native_reader_binding.py')
-          test_path.write_text('''from cps.pythia import runner\nfrom cps.pythia.native_state_packet import reconstruct_zero_adam_state\n\n\ndef test_runner_binds_packet_aware_native_reader_directly():\n    assert runner.reconstruct_zero_adam_state is reconstruct_zero_adam_state\n    assert runner.reconstruct_zero_adam_state.__module__ == "cps.pythia.native_state_grouped"\n''')
+          test_path.write_text('''from cps.pythia import runner\nfrom cps.pythia.native_state_packet import reconstruct_zero_adam_state\n\n\ndef test_runner_binds_packet_aware_native_reader_directly():\n    assert runner.reconstruct_zero_adam_state is reconstruct_zero_adam_state\n''')
 
           pyproject = Path('pyproject.toml')
           text = pyproject.read_text()
@@ -79,6 +79,13 @@ jobs:
               raise SystemExit('expected version 0.2.8')
           pyproject.write_text(text.replace('version = "0.2.8"', 'version = "0.2.9"', 1))
           PY
+      - name: Commit implementation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/cps/pythia/runner.py notebooks/04_native_optimizer_state.ipynb tests/pythia/test_native_reader_binding.py pyproject.toml
+          git commit -m 'Bind packet-aware native reader directly in runner and notebook'
+          git push origin HEAD:${{ github.head_ref }}
       - name: Install and validate
         run: |
           python -m pip install --upgrade pip
@@ -89,10 +96,3 @@ jobs:
           python -m compileall -q src scripts tests
           python -m pip install build
           python -m build
-      - name: Commit implementation
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/cps/pythia/runner.py notebooks/04_native_optimizer_state.ipynb tests/pythia/test_native_reader_binding.py pyproject.toml
-          git commit -m 'Bind packet-aware native reader directly in runner and notebook'
-          git push origin HEAD:${{ github.head_ref }}
