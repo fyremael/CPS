@@ -28,6 +28,7 @@ jobs:
 
       - name: Validate generated notebooks and Python syntax
         run: |
+          python -m pip install --quiet nbformat
           python scripts/validate_notebooks.py
           python -m compileall -q src scripts tests
 
