@@ -3,6 +3,8 @@ name: Diagnose Python 3.12 tests
 on:
   push:
     branches: [fix/verbose-notebooks-forward-ad]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
