@@ -97,7 +97,9 @@ The Pythia-70M notebook also explains the fused-SDPA forward-AD limitation and d
 
 ## Native optimizer states
 
-Download the raw checkpoint files required for moment reconstruction:
+The Transformers-compatible Pythia repositories and the native GPT-NeoX optimizer-state repositories do not necessarily expose the same Hub refs. A semantic request for the final checkpoint remains `step143000`, but a current native repository may store those files only on `main`.
+
+Download the raw files required for moment reconstruction:
 
 ```bash
 cps-pythia download-native \
@@ -106,13 +108,15 @@ cps-pythia download-native \
   /data/native-pythia-70m-step143000
 ```
 
-Inspect the schema:
+The downloader lists the repository refs before downloading. It prefers a real `step143000` ref when present; otherwise, for a Pythia native repository exposing only `main`, it resolves the final-step request to `main` and records both revisions in `cps_download_manifest.json`. Missing intermediate native revisions fail closed rather than substituting a weight-only checkpoint.
+
+Inspect the native checkpoint:
 
 ```bash
 cps-pythia inspect-native /data/native-pythia-70m-step143000
 ```
 
-Then use `moment_source: native` and set `native_checkpoint_dir` in the run configuration. Historical checkpoints are pickle-based external artifacts; load only trusted repositories.
+Then use `moment_source: native` and set `native_checkpoint_dir` in the run configuration. Native state files are pickle-based external artifacts; load only trusted repositories.
 
 ## Campaign outputs
 
