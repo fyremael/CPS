@@ -58,6 +58,21 @@ def _numel(group: OrderedDict[str, tuple[int, ...]]) -> int:
     return sum(legacy._numel(shape) for shape in group.values())
 
 
+def _aligned_capacity(expected: int, partition_count: int) -> int:
+    """Return the total capacity after equal ZeRO partitioning.
+
+    Each rank stores the same flattened partition length, so the aggregate
+    capacity is the smallest multiple of the data-parallel partition count that
+    can hold the group. This is stricter than accepting an arbitrary padding
+    interval and prevents a small no-decay group from masquerading as a larger
+    decay group in reduced test fixtures.
+    """
+
+    if partition_count <= 0:
+        raise ValueError(f"partition_count must be positive, got {partition_count}")
+    return ((expected + partition_count - 1) // partition_count) * partition_count
+
+
 def _infer_optimizer_shape_groups(
     caller_groups: list[OrderedDict[str, tuple[int, ...]]],
     capacities: tuple[int, ...],
@@ -95,11 +110,9 @@ def _infer_optimizer_shape_groups(
     )
 
     observed = capacities[0]
-    maximum_padding = 2 * partition_count
 
     def fits(group: OrderedDict[str, tuple[int, ...]]) -> bool:
-        padding = observed - _numel(group)
-        return 0 <= padding <= maximum_padding
+        return observed == _aligned_capacity(_numel(group), partition_count)
 
     if fits(complete):
         return caller_groups, None
@@ -118,15 +131,21 @@ def _infer_optimizer_shape_groups(
             "weight_decay_only": _numel(decay),
             "no_decay_only": _numel(no_decay),
         }
+        aligned = {
+            name: _aligned_capacity(size, partition_count)
+            for name, size in sizes.items()
+        }
         if not candidates:
             raise ValueError(
                 "single native Adam moment group does not match the complete, "
-                "weight-decay, or no-decay GPT-NeoX parameter contract: "
-                f"observed={observed}, candidate sizes={sizes}"
+                "weight-decay, or no-decay GPT-NeoX parameter contract after "
+                f"exact ZeRO alignment: observed={observed}, raw sizes={sizes}, "
+                f"aligned capacities={aligned}"
             )
         raise ValueError(
             "single native Adam moment group is ambiguous under the GPT-NeoX "
-            f"parameter contract: observed={observed}, candidate sizes={sizes}"
+            f"parameter contract: observed={observed}, raw sizes={sizes}, "
+            f"aligned capacities={aligned}"
         )
 
     coverage, available, unavailable = candidates[0]
@@ -134,13 +153,15 @@ def _infer_optimizer_shape_groups(
     report = {
         "method": "single_native_moment_group_capacity",
         "rule": "rank_gt_1_weight_decay_else_no_decay",
+        "alignment_rule": "ceil(numel / partition_count) * partition_count",
         "coverage": coverage,
         "group_count": 1,
         "expected_group_numel": [expected],
         "observed_group_numel": [observed],
         "padding_numel": [observed - expected],
         "parameter_counts": [len(available)],
-        "maximum_allowed_padding_per_group": maximum_padding,
+        "partition_count": partition_count,
+        "maximum_allowed_padding_per_group": partition_count - 1,
         "unavailable_parameter_class": (
             "one_dimensional_no_decay"
             if coverage == "weight_decay_only"
