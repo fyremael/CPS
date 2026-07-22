@@ -1,0 +1,37 @@
+name: Apply native reader error contract
+
+on:
+  push:
+    branches: [fix/native-reader-reload-idempotency]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/native-reader-reload-idempotency
+          fetch-depth: 0
+      - name: Preserve established failure contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/cps/pythia/native_state_stable.py')
+          text = path.read_text()
+          old = '''            raise ValueError(\n                "native Adam groups do not identify a unique GPT-NeoX "\n                f"decay/no-decay ordering: observed={list(capacities)}, "\n                f"candidate sizes={candidate_sizes}"\n            )\n'''
+          new = '''            raise ValueError(\n                "caller model contract does not fit the native optimizer moment groups "\n                "or does not identify a unique GPT-NeoX decay/no-decay ordering: "\n                f"observed={list(capacities)}, candidate sizes={candidate_sizes}"\n            )\n'''
+          if old not in text:
+              raise SystemExit('two-group error-contract anchor not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/cps/pythia/native_state_stable.py
+          git commit -m 'Preserve native group mismatch error contract'
+          git push origin HEAD:fix/native-reader-reload-idempotency
