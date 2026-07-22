@@ -1,0 +1,208 @@
+name: Apply native optimizer-group inference patch
+
+on:
+  push:
+    branches: [fix/native-optimizer-group-inference]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/native-optimizer-group-inference
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply implementation patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          native_path = Path('src/cps/pythia/native_state.py')
+          text = native_path.read_text()
+
+          anchor = '''def _relative_error(observed: float, expected: float) -> float:\n    scale = max(abs(expected), 1.0e-12)\n    return abs(observed - expected) / scale\n\n\n'''
+          helpers = '''def _moment_group_capacities(moment_by_rank: list[list[Any]]) -> tuple[int, ...]:\n    if not moment_by_rank:\n        return ()\n    counts = {len(groups) for groups in moment_by_rank}\n    if len(counts) != 1:\n        raise ValueError(\n            \"optimizer shards disagree on moment-group count: \"\n            f\"{sorted(counts)}\"\n        )\n    group_count = next(iter(counts))\n    return tuple(\n        sum(int(rank[group_index].numel()) for rank in moment_by_rank)\n        for group_index in range(group_count)\n    )\n\n\ndef _uses_weight_decay(name: str, shape: tuple[int, ...]) -> bool:\n    \"\"\"Match the GPT-NeoX/Megatron decay split used by Pythia.\n\n    Matrix and embedding parameters receive weight decay. Biases, LayerNorm\n    scales, and other one-dimensional parameters are placed in the no-decay\n    group. The released Pythia-70M packet exposes these as separate flattened\n    Adam-state groups.\n    \"\"\"\n\n    del name\n    return len(shape) > 1\n\n\ndef _capacity_report(\n    groups: list[OrderedDict[str, tuple[int, ...]]],\n    capacities: tuple[int, ...],\n    *,\n    partition_count: int,\n    rule: str,\n    order: str,\n) -> dict[str, Any] | None:\n    if len(groups) != len(capacities):\n        return None\n    expected = tuple(sum(_numel(shape) for shape in group.values()) for group in groups)\n    padding = tuple(capacity - wanted for capacity, wanted in zip(capacities, expected, strict=True))\n    maximum_padding = 2 * partition_count\n    if any(value < 0 or value > maximum_padding for value in padding):\n        return None\n    return {\n        \"method\": \"optimizer_moment_group_capacities\",\n        \"rule\": rule,\n        \"order\": order,\n        \"group_count\": len(groups),\n        \"expected_group_numel\": list(expected),\n        \"observed_group_numel\": list(capacities),\n        \"padding_numel\": list(padding),\n        \"parameter_counts\": [len(group) for group in groups],\n        \"maximum_allowed_padding_per_group\": maximum_padding,\n    }\n\n\ndef _infer_optimizer_shape_groups(\n    caller_groups: list[OrderedDict[str, tuple[int, ...]]],\n    capacities: tuple[int, ...],\n    *,\n    partition_count: int,\n) -> tuple[list[OrderedDict[str, tuple[int, ...]]], dict[str, Any] | None]:\n    \"\"\"Recover the optimizer's decay/no-decay group contract by exact size.\n\n    A caller-supplied Transformers contract is normally one ordered mapping,\n    while GPT-NeoX constructs two optimizer groups. Infer that split only when\n    the observed flattened moment capacities identify one candidate uniquely.\n    \"\"\"\n\n    if len(caller_groups) != 1 or len(capacities) <= 1:\n        return caller_groups, None\n    if len(capacities) != 2:\n        raise ValueError(\n            \"native checkpoint omits param_shapes and exposes \"\n            f\"{len(capacities)} optimizer moment groups. CPS currently has a governed \"\n            \"fallback only for the two-group GPT-NeoX weight-decay/no-decay contract.\"\n        )\n\n    complete = caller_groups[0]\n    decay = OrderedDict(\n        (name, shape) for name, shape in complete.items() if _uses_weight_decay(name, shape)\n    )\n    no_decay = OrderedDict(\n        (name, shape) for name, shape in complete.items() if not _uses_weight_decay(name, shape)\n    )\n    if not decay or not no_decay:\n        raise ValueError(\n            \"could not form both GPT-NeoX weight-decay and no-decay parameter groups \"\n            \"from the loaded model contract\"\n        )\n\n    candidates = (\n        (\"weight_decay_then_no_decay\", [decay, no_decay]),\n        (\"no_decay_then_weight_decay\", [no_decay, decay]),\n    )\n    feasible: list[tuple[list[OrderedDict[str, tuple[int, ...]]], dict[str, Any]]] = []\n    for order, groups in candidates:\n        report = _capacity_report(\n            groups,\n            capacities,\n            partition_count=partition_count,\n            rule=\"rank_gt_1_weight_decay_else_no_decay\",\n            order=order,\n        )\n        if report is not None:\n            feasible.append((groups, report))\n\n    if len(feasible) == 1:\n        return feasible[0]\n    expected_candidates = {\n        order: [sum(_numel(shape) for shape in group.values()) for group in groups]\n        for order, groups in candidates\n    }\n    if not feasible:\n        raise ValueError(\n            \"caller model contract does not fit the native optimizer moment groups. \"\n            f\"observed capacities={list(capacities)}, candidate sizes={expected_candidates}. \"\n            \"This is a checkpoint/optimizer-contract mismatch, not permissible padding.\"\n        )\n    raise ValueError(\n        \"native optimizer-group order is ambiguous under the capacity contract: \"\n        f\"observed capacities={list(capacities)}, candidate sizes={expected_candidates}\"\n    )\n\n\ndef _master_group_count(optimizer_payloads: list[Mapping[str, Any]]) -> int | None:\n    extracted = [_flat_partition_groups(payload) for payload in optimizer_payloads]\n    concrete = [item for item in extracted if item is not None]\n    if not concrete:\n        return None\n    counts = {len(item[1]) for item in concrete}\n    if len(counts) != 1:\n        raise ValueError(f\"optimizer shards disagree on fp32 master group count: {sorted(counts)}\")\n    return next(iter(counts))\n\n\n'''
+          if anchor not in text:
+              raise SystemExit('native_state helper anchor not found')
+          text = text.replace(anchor, helpers + anchor, 1)
+
+          old = '''    param_groups = _find_param_shapes(model_payloads)\n    shape_source = "model_checkpoint_param_shapes"\n    validation: dict[str, Any] = {"method": "checkpoint_metadata", "validated": True}\n    if param_groups is None:\n        param_groups = _find_param_shapes(optimizer_payloads)\n        shape_source = "optimizer_checkpoint_param_shapes"\n    if param_groups is None:\n        param_groups = _caller_shape_groups(parameter_shapes)\n        shape_source = "validated_model_parameter_order"\n        if param_groups is None:\n            model_keys = sorted({str(key) for payload in model_payloads for key in payload.keys()})\n            optimizer_keys = sorted(\n                {str(key) for payload in optimizer_payloads[:1] for key in payload.keys()}\n            )\n            raise KeyError(\n                "could not find param_shapes in native checkpoint metadata. "\n                "Supply the loaded model's ordered parameter_shapes and reference_signatures "\n                "for validated reconstruction. "\n                f"model top-level keys={model_keys}; optimizer top-level keys={optimizer_keys}"\n            )\n        validation = _validate_caller_order(\n            optimizer_payloads,\n            param_groups,\n            reference_signatures,\n            signature_rtol=signature_rtol,\n            minimum_match_fraction=minimum_match_fraction,\n        )\n        validation["validated"] = True\n\n    avg_by_rank = [_moment_tensors(payload, "exp_avg") for payload in optimizer_payloads]\n    sq_by_rank = [_moment_tensors(payload, "exp_avg_sq") for payload in optimizer_payloads]\n'''
+          new = '''    avg_by_rank = [_moment_tensors(payload, "exp_avg") for payload in optimizer_payloads]\n    sq_by_rank = [_moment_tensors(payload, "exp_avg_sq") for payload in optimizer_payloads]\n    avg_capacities = _moment_group_capacities(avg_by_rank)\n    sq_capacities = _moment_group_capacities(sq_by_rank)\n    if avg_capacities != sq_capacities:\n        raise ValueError(\n            "first- and second-moment group capacities disagree: "\n            f"exp_avg={list(avg_capacities)}, exp_avg_sq={list(sq_capacities)}"\n        )\n\n    param_groups = _find_param_shapes(model_payloads)\n    shape_source = "model_checkpoint_param_shapes"\n    validation: dict[str, Any] = {"method": "checkpoint_metadata", "validated": True}\n    if param_groups is None:\n        param_groups = _find_param_shapes(optimizer_payloads)\n        shape_source = "optimizer_checkpoint_param_shapes"\n    if param_groups is None:\n        caller_groups = _caller_shape_groups(parameter_shapes)\n        if caller_groups is None:\n            model_keys = sorted({str(key) for payload in model_payloads for key in payload.keys()})\n            optimizer_keys = sorted(\n                {str(key) for payload in optimizer_payloads[:1] for key in payload.keys()}\n            )\n            raise KeyError(\n                "could not find param_shapes in native checkpoint metadata. "\n                "Supply the loaded model's ordered parameter_shapes and reference_signatures "\n                "for validated reconstruction. "\n                f"model top-level keys={model_keys}; optimizer top-level keys={optimizer_keys}"\n            )\n\n        param_groups, group_report = _infer_optimizer_shape_groups(\n            caller_groups,\n            avg_capacities,\n            partition_count=len(optimizer_files),\n        )\n        shape_source = (\n            "validated_model_parameter_order_with_inferred_optimizer_groups"\n            if group_report is not None\n            else "validated_model_parameter_order"\n        )\n        try:\n            validation = _validate_caller_order(\n                optimizer_payloads,\n                param_groups,\n                reference_signatures,\n                signature_rtol=signature_rtol,\n                minimum_match_fraction=minimum_match_fraction,\n            )\n        except ValueError as grouped_error:\n            master_groups = _master_group_count(optimizer_payloads)\n            if group_report is None or master_groups != 1:\n                raise\n            global_validation = _validate_caller_order(\n                optimizer_payloads,\n                caller_groups,\n                reference_signatures,\n                signature_rtol=signature_rtol,\n                minimum_match_fraction=minimum_match_fraction,\n            )\n            validation = {\n                "method": "global_fp32_signatures_plus_optimizer_group_capacities",\n                "validated": True,\n                "match_fraction": global_validation["match_fraction"],\n                "global_order_validation": global_validation,\n                "group_specific_master_validation_unavailable": str(grouped_error),\n            }\n        validation["validated"] = True\n        if group_report is not None:\n            validation["optimizer_groups"] = group_report\n\n'''
+          if old not in text:
+              raise SystemExit('native_state reconstruction block not found')
+          native_path.write_text(text.replace(old, new, 1))
+
+          runner_path = Path('src/cps/pythia/runner.py')
+          runner = runner_path.read_text()
+          old_runner = '''        if native.shape_validation.get("match_fraction") is not None:\n            reporter.metric(\n                "native order signature match",\n                f"{native.shape_validation['match_fraction']:.1%}",\n            )\n'''
+          new_runner = '''        if native.shape_validation.get("match_fraction") is not None:\n            reporter.metric(\n                "native order signature match",\n                f"{native.shape_validation['match_fraction']:.1%}",\n            )\n        group_validation = native.shape_validation.get("optimizer_groups")\n        if group_validation is not None:\n            reporter.metric("native optimizer groups", group_validation["group_count"])\n            reporter.metric("native optimizer group order", group_validation["order"])\n            reporter.info(\n                "Optimizer-group contract: "\n                f"expected={group_validation['expected_group_numel']}; "\n                f"observed={group_validation['observed_group_numel']}; "\n                f"padding={group_validation['padding_numel']}"\n            )\n'''
+          if old_runner not in runner:
+              raise SystemExit('runner reporting block not found')
+          runner_path.write_text(runner.replace(old_runner, new_runner, 1))
+
+          tests_path = Path('tests/pythia/test_native_state.py')
+          tests = tests_path.read_text()
+          addition = r'''
+
+
+def test_infers_pythia_weight_decay_and_no_decay_moment_groups(tmp_path):
+    torch.save({"iteration": 143000}, tmp_path / "mp_rank_00_model_states.pt")
+    shapes = OrderedDict(
+        [
+            ("gpt_neox.layers.0.attention.dense.weight", (2, 3)),
+            ("gpt_neox.layers.0.attention.dense.bias", (2,)),
+            ("gpt_neox.layers.0.input_layernorm.weight", (2,)),
+        ]
+    )
+    decay_w = torch.tensor([0.5, -1.0, 2.0, 3.0, -4.0, 1.5])
+    no_decay_w = torch.tensor([0.25, -0.5, 1.25, -1.5])
+    decay_m = torch.arange(1.0, 7.0)
+    no_decay_m = torch.arange(7.0, 11.0)
+
+    for rank in range(2):
+        decay_slice = slice(rank * 3, (rank + 1) * 3)
+        no_decay_slice = slice(rank * 2, (rank + 1) * 2)
+        payload = {
+            "optimizer_state_dict": {
+                "single_partition_of_fp32_groups": [
+                    decay_w[decay_slice].clone(),
+                    no_decay_w[no_decay_slice].clone(),
+                ],
+                "optimizer_state_dict": {
+                    "state": {
+                        0: {
+                            "exp_avg": decay_m[decay_slice].clone(),
+                            "exp_avg_sq": decay_m[decay_slice].square(),
+                        },
+                        1: {
+                            "exp_avg": no_decay_m[no_decay_slice].clone(),
+                            "exp_avg_sq": no_decay_m[no_decay_slice].square(),
+                        },
+                    }
+                },
+            }
+        }
+        torch.save(payload, tmp_path / f"zero_pp_rank_{rank}_mp_rank_00_optim_states.pt")
+
+    references = {
+        "gpt_neox.layers.0.attention.dense.weight": {
+            "l2": float(decay_w.norm()),
+            "l1": float(decay_w.abs().sum()),
+        },
+        "gpt_neox.layers.0.attention.dense.bias": {
+            "l2": float(no_decay_w[:2].norm()),
+            "l1": float(no_decay_w[:2].abs().sum()),
+        },
+        "gpt_neox.layers.0.input_layernorm.weight": {
+            "l2": float(no_decay_w[2:].norm()),
+            "l1": float(no_decay_w[2:].abs().sum()),
+        },
+    }
+
+    state = reconstruct_zero_adam_state(
+        tmp_path,
+        parameter_shapes=shapes,
+        reference_signatures=references,
+    )
+
+    assert state.shape_source == "validated_model_parameter_order_with_inferred_optimizer_groups"
+    groups = state.shape_validation["optimizer_groups"]
+    assert groups["order"] == "weight_decay_then_no_decay"
+    assert groups["expected_group_numel"] == [6, 4]
+    assert groups["observed_group_numel"] == [6, 4]
+    assert torch.equal(
+        state.exp_avg["gpt_neox.layers.0.attention.dense.weight"],
+        decay_m.reshape(2, 3),
+    )
+    assert torch.equal(
+        state.exp_avg["gpt_neox.layers.0.attention.dense.bias"],
+        no_decay_m[:2],
+    )
+    assert torch.equal(
+        state.exp_avg["gpt_neox.layers.0.input_layernorm.weight"],
+        no_decay_m[2:],
+    )
+
+
+def test_pythia_70m_group_deficit_is_exactly_biases_and_layernorms():
+    hidden = 512
+    intermediate = 2048
+    shapes = OrderedDict()
+    shapes["gpt_neox.embed_in.weight"] = (50304, hidden)
+    for layer in range(6):
+        prefix = f"gpt_neox.layers.{layer}"
+        shapes[f"{prefix}.input_layernorm.weight"] = (hidden,)
+        shapes[f"{prefix}.input_layernorm.bias"] = (hidden,)
+        shapes[f"{prefix}.post_attention_layernorm.weight"] = (hidden,)
+        shapes[f"{prefix}.post_attention_layernorm.bias"] = (hidden,)
+        shapes[f"{prefix}.attention.query_key_value.weight"] = (3 * hidden, hidden)
+        shapes[f"{prefix}.attention.query_key_value.bias"] = (3 * hidden,)
+        shapes[f"{prefix}.attention.dense.weight"] = (hidden, hidden)
+        shapes[f"{prefix}.attention.dense.bias"] = (hidden,)
+        shapes[f"{prefix}.mlp.dense_h_to_4h.weight"] = (intermediate, hidden)
+        shapes[f"{prefix}.mlp.dense_h_to_4h.bias"] = (intermediate,)
+        shapes[f"{prefix}.mlp.dense_4h_to_h.weight"] = (hidden, intermediate)
+        shapes[f"{prefix}.mlp.dense_4h_to_h.bias"] = (hidden,)
+    shapes["gpt_neox.final_layer_norm.weight"] = (hidden,)
+    shapes["gpt_neox.final_layer_norm.bias"] = (hidden,)
+    shapes["embed_out.weight"] = (50304, hidden)
+
+    no_decay = sum(torch.tensor(shape).prod().item() for shape in shapes.values() if len(shape) <= 1)
+    decay = sum(torch.tensor(shape).prod().item() for shape in shapes.values() if len(shape) > 1)
+
+    assert no_decay == 40960
+    assert decay == 70385664
+    assert decay + no_decay == 70426624
+'''
+          tests_path.write_text(tests + addition)
+
+          pyproject = Path('pyproject.toml')
+          ptext = pyproject.read_text().replace('version = "0.2.6"', 'version = "0.2.7"', 1)
+          pyproject.write_text(ptext)
+
+          notebook_path = Path('notebooks/04_native_optimizer_state.ipynb')
+          nb = json.loads(notebook_path.read_text())
+          marker = '## Reconstruct and probe with native moments'
+          for cell in nb['cells']:
+              if cell.get('cell_type') == 'markdown' and marker in ''.join(cell.get('source', [])):
+                  cell['source'] = [
+                      '## Reconstruct and probe with native moments\n',
+                      '\n',
+                      'The native Adam tensors are flattened by optimizer parameter group. Pythia uses a weight-decay group for matrix/embedding tensors and a no-decay group for biases and LayerNorm parameters. For 70M these contain **70,385,664** and **40,960** parameters respectively.\n',
+                      '\n',
+                      'When `param_shapes` is absent, CPS now requires three agreements before assigning names: the global Transformers/native weight signatures, the exact optimizer-group capacities (allowing only DeepSpeed partition padding), and the standard GPT-NeoX rank-based decay split. The run prints and records all three.\n',
+                  ]
+                  break
+          else:
+              raise SystemExit('notebook reconstruction markdown cell not found')
+          notebook_path.write_text(json.dumps(nb, indent=1) + '\n')
+          PY
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev,notebooks]'
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install pandas
+      - name: Validate
+        run: |
+          pytest -q
+          python scripts/validate_notebooks.py
+          python -m compileall -q src scripts tests
+          python -m pip install build
+          python -m build
+      - name: Commit implementation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/cps/pythia/native_state.py src/cps/pythia/runner.py tests/pythia/test_native_state.py notebooks/04_native_optimizer_state.ipynb pyproject.toml
+          git commit -m 'Infer Pythia optimizer decay groups from native moment capacities'
+          git push origin HEAD:fix/native-optimizer-group-inference
