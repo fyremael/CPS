@@ -6,6 +6,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from cps.progress import ConsoleReporter
+
 
 @dataclass(frozen=True)
 class ContinuationControl:
@@ -37,6 +39,7 @@ class ContinuationConfig:
         default_factory=lambda: ContinuationControl(name="cps", learning_rate_scale=0.8)
     )
     output_dir: str = "artifacts/pythia/continuation"
+    verbose: bool = True
 
 
 @dataclass(frozen=True)
@@ -66,13 +69,19 @@ class ForkResult:
         }
 
 
-def run_matched_continuation(config: ContinuationConfig) -> Path:
+def run_matched_continuation(
+    config: ContinuationConfig,
+    *,
+    reporter: ConsoleReporter | None = None,
+) -> Path:
     try:
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError("install the 'pythia' extra for continuation experiments") from exc
 
+    reporter = reporter or ConsoleReporter(enabled=config.verbose, prefix="CPS-CONT")
+    reporter.title("Coupling-Phase Spectroscopy · matched continuation")
     if config.steps < 1:
         raise ValueError("steps must be positive")
     device = (
@@ -86,6 +95,11 @@ def run_matched_continuation(config: ContinuationConfig) -> Path:
     if device.type == "cpu":
         dtype = torch.float32
 
+    reporter.section("Load the common checkpoint and deterministic batches")
+    reporter.metric("model", config.model_id)
+    reporter.metric("revision", config.revision)
+    reporter.metric("steps per fork", config.steps)
+    reporter.metric("device", device)
     tokenizer = AutoTokenizer.from_pretrained(config.model_id, revision=config.revision)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -96,12 +110,18 @@ def run_matched_continuation(config: ContinuationConfig) -> Path:
     ).to(device)
     initial = {name: tensor.detach().cpu().clone() for name, tensor in model.state_dict().items()}
     batches = _make_batches(tokenizer, config, device)
+    reporter.metric("prepared batches", len(batches))
 
     results: dict[str, ForkResult] = {}
-    for control in (config.baseline, config.intervention):
+    for fork_index, control in enumerate((config.baseline, config.intervention), start=1):
+        reporter.section(f"Run matched fork {fork_index}/2: {control.name}")
+        reporter.info(
+            f"lr scale={control.learning_rate_scale}, beta1={control.beta1}, "
+            f"beta2={control.beta2}, epsilon scale={control.epsilon_scale}"
+        )
         model.load_state_dict(initial)
         model.train()
-        results[control.name] = _run_fork(model, batches, config, control)
+        results[control.name] = _run_fork(model, batches, config, control, reporter)
 
     output = Path(config.output_dir) / config.revision
     output.mkdir(parents=True, exist_ok=True)
@@ -116,6 +136,17 @@ def run_matched_continuation(config: ContinuationConfig) -> Path:
         ),
         encoding="utf-8",
     )
+    baseline = results[config.baseline.name]
+    intervention = results[config.intervention.name]
+    reporter.section("Compare the matched outcomes")
+    reporter.metric("baseline final loss", f"{baseline.final_loss:.6g}")
+    reporter.metric("intervention final loss", f"{intervention.final_loss:.6g}")
+    reporter.metric(
+        "final-loss difference (intervention - baseline)",
+        f"{intervention.final_loss - baseline.final_loss:+.6g}",
+    )
+    reporter.metric("evidence packet", target)
+    reporter.success("Matched continuation completed.")
     return target
 
 
@@ -150,7 +181,13 @@ def _make_batches(tokenizer, config: ContinuationConfig, device):
     return batches
 
 
-def _run_fork(model, batches, config: ContinuationConfig, control: ContinuationControl) -> ForkResult:
+def _run_fork(
+    model,
+    batches,
+    config: ContinuationConfig,
+    control: ContinuationControl,
+    reporter: ConsoleReporter,
+) -> ForkResult:
     import torch
 
     beta1 = config.beta1 if control.beta1 is None else control.beta1
@@ -178,14 +215,20 @@ def _run_fork(model, batches, config: ContinuationConfig, control: ContinuationC
         if control.gradient_clip is not None:
             torch.nn.utils.clip_grad_norm_(model.parameters(), control.gradient_clip)
         optimizer.step()
-        records.append(
-            StepRecord(
-                step=step,
-                loss=float(loss.detach()),
-                gradient_norm=gradient_norm,
-                parameter_norm=float(parameter_sq.sqrt()),
-                elapsed_seconds=time.time() - started,
-            )
+        record = StepRecord(
+            step=step,
+            loss=float(loss.detach()),
+            gradient_norm=gradient_norm,
+            parameter_norm=float(parameter_sq.sqrt()),
+            elapsed_seconds=time.time() - started,
+        )
+        records.append(record)
+        reporter.progress(
+            step,
+            len(batches),
+            control.name,
+            f"loss={record.loss:.5f}; ||g||={record.gradient_norm:.4g}; "
+            f"elapsed={record.elapsed_seconds:.1f}s",
         )
     losses = [record.loss for record in records]
     trend = min(losses[0], sum(losses[: min(3, len(losses))]) / min(3, len(losses)))

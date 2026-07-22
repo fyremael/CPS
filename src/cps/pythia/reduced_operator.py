@@ -22,6 +22,8 @@ class ProjectionDiagnostics:
 def project_jacobian(
     jvp: Callable[[object], object],
     basis: Sequence[BasisVector],
+    *,
+    progress: Callable[[int, int, BasisVector, float, float], None] | None = None,
 ) -> tuple[np.ndarray, ProjectionDiagnostics]:
     if not basis:
         raise ValueError("basis must not be empty")
@@ -40,6 +42,8 @@ def project_jacobian(
             projected = projected + coefficient * target.vector
         residual = float((image - projected).norm()) / max(norm, 1e-30)
         residuals.append(residual)
+        if progress is not None:
+            progress(column + 1, rank, source, norm, residual)
     diagnostics = ProjectionDiagnostics(
         rank=rank,
         maximum_closure_residual=max(residuals),

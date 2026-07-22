@@ -4,38 +4,39 @@ model:
   device: auto
   dtype: float32
   cache_dir: /content/.cache/huggingface
-
+  attention_implementation: eager
 data:
   source: builtin
   sequence_length: 32
   batch_size: 1
-
 state:
   moment_source: reconstructed
   step: 1000
   beta1: 0.9
   beta2: 0.95
-  epsilon: 1.0e-8
-  learning_rate: 3.0e-4
+  epsilon: 1.0e-08
+  learning_rate: 0.0003
   weight_decay: 0.01
-
 basis:
   parameter_patterns:
-    - gpt_neox.layers.0.attention.dense.weight
+  - gpt_neox.layers.0.attention.dense.weight
   max_selected_numel: 2000000
-  components: [theta, update, random]
+  components:
+  - theta
+  - update
+  - random
   random_vectors_per_block: 1
   rank: 3
-
 jacobian:
   mode: finite_difference
-
+  autodiff_backend: auto
+  fallback_to_finite_difference: true
 sweep:
   phase_count: 25
   finite_horizon: 12
   compute_kreiss: false
   maximum_couplings: 6
-
 output:
   root: /content/cps-artifacts
   run_name: pythia-scale-transfer
+  verbose: true
