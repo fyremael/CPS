@@ -1,3 +1,4 @@
+# Pedagogical Colab default: emit live progress and avoid fused SDPA forward-AD gaps.
 model:
   run: pythia-70m
   revision: step0
