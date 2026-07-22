@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coupling-phase-spectroscopy"
-version = "0.2.6"
+version = "0.2.7"
 description = "Structured pseudospectral diagnostics for projected optimizer-state Jacobians"
 readme = "README.md"
 requires-python = ">=3.10"
