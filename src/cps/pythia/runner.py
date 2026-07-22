@@ -189,6 +189,16 @@ def run_probe(
                 "native order signature match",
                 f"{native.shape_validation['match_fraction']:.1%}",
             )
+        name_alignment = native.shape_validation.get("name_alignment")
+        if name_alignment is not None:
+            reporter.metric("native name aliases", name_alignment.get("alias_count", 0))
+            for item in name_alignment.get("aliases", []):
+                if item.get("requested_name") != item.get("native_name"):
+                    reporter.info(
+                        "Native name alignment: "
+                        f"{item.get('native_name')} → {item.get('requested_name')} "
+                        f"({item.get('method')}; transform={item.get('transform')})"
+                    )
         group_validation = native.shape_validation.get("optimizer_groups")
         if group_validation is not None:
             reporter.metric(
