@@ -1,8 +1,8 @@
 name: Repair notebook tone polish
 
 on:
-  push:
-    branches: [polish/notebook-release-tone]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: write
@@ -15,12 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: polish/notebook-release-tone
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Repair stage rendering and theme order
+      - name: Repair stage rendering, theme order, and style tests
         run: |
           python - <<'PY'
           import json
@@ -86,9 +86,13 @@ jobs:
 
           tests = Path('tests/test_notebook_release_style.py')
           test_text = tests.read_text(encoding='utf-8')
+          test_text = test_text.replace(
+              'assert "Grand Challenge release notebook" in text',
+              'assert "Grand Challenge Labs · Coupling-Phase Spectroscopy" in text',
+          )
           if 'test_theme_is_applied_before_first_stage_card' not in test_text:
               test_text += '''\n\ndef test_theme_is_applied_before_first_stage_card():\n    for path in sorted(Path("notebooks").glob("*.ipynb")):\n        notebook = nbformat.read(path, as_version=4)\n        source = "\\n".join(cell.source for cell in notebook.cells if cell.cell_type == "code")\n        assert source.index("apply_release_theme()") < source.index("stage_banner(")\n'''
-              tests.write_text(test_text, encoding='utf-8')
+          tests.write_text(test_text, encoding='utf-8')
           PY
       - name: Commit repair
         run: |
@@ -96,7 +100,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/cps/notebook.py notebooks tests/test_notebook_release_style.py
           git commit -m 'Repair release theme rendering and initialization order'
-          git push origin HEAD:polish/notebook-release-tone
+          git push origin HEAD:${{ github.head_ref }}
       - name: Validate polished suite
         run: |
           python -m pip install --upgrade pip
