@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import platform
 import shutil
@@ -9,6 +10,8 @@ from typing import Any, Iterable
 
 from .plot_labels import compact_basis_labels
 
+_THEME_APPLIED = False
+
 
 def _display_markdown(text: str) -> None:
     try:
@@ -17,6 +20,82 @@ def _display_markdown(text: str) -> None:
         display(Markdown(text))
     except ImportError:  # pragma: no cover - notebook convenience
         print(text)
+
+
+def _display_html(text: str) -> None:
+    try:
+        from IPython.display import HTML, display
+
+        display(HTML(text))
+    except ImportError:  # pragma: no cover - notebook convenience
+        print(text)
+
+
+def apply_release_theme(*, force: bool = False) -> None:
+    """Install the restrained visual language used by CPS release notebooks."""
+
+    global _THEME_APPLIED
+    if _THEME_APPLIED and not force:
+        return
+    _display_html(
+        """
+<style>
+:root {
+  --cps-ink: #17212b;
+  --cps-muted: #596574;
+  --cps-accent: #315f78;
+  --cps-surface: #f6f8fa;
+  --cps-line: #d8dee5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --cps-ink: #e8edf2;
+    --cps-muted: #b3bdc7;
+    --cps-accent: #83b6cf;
+    --cps-surface: #17212b;
+    --cps-line: #3a4652;
+  }
+}
+.cps-stage {
+  margin: 1.35rem 0 1rem;
+  padding: 1rem 1.15rem 1.05rem;
+  border: 1px solid var(--cps-line);
+  border-left: 4px solid var(--cps-accent);
+  border-radius: 8px;
+  background: var(--cps-surface);
+  color: var(--cps-ink);
+}
+.cps-stage__index {
+  margin-bottom: .35rem;
+  color: var(--cps-accent);
+  font-size: .74rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.cps-stage__title {
+  margin: 0 0 .75rem;
+  font-size: 1.22rem;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+.cps-stage__grid {
+  display: grid;
+  grid-template-columns: minmax(7rem, .28fr) 1fr;
+  gap: .42rem .9rem;
+  font-size: .94rem;
+  line-height: 1.5;
+}
+.cps-stage__label {
+  color: var(--cps-muted);
+  font-weight: 650;
+}
+.cps-stage__value { color: var(--cps-ink); }
+.output_html table { font-size: .94rem; }
+</style>
+        """
+    )
+    _THEME_APPLIED = True
 
 
 def lesson(title: str, body: str) -> None:
@@ -39,10 +118,17 @@ def stage_banner(
 ) -> None:
     """Render a uniform Grand Challenge stage boundary."""
 
-    _display_markdown(
-        f"---\n\n## Stage {stage} — {title}\n\n"
-        f"**Objective.** {objective}\n\n"
-        f"**Deliverable.** {deliverable}\n\n---"
+    apply_release_theme()
+    _display_html(
+        '<section class="cps-stage">'
+        f'<div class="cps-stage__index">Stage {html.escape(str(stage))}</div>'
+        f'<div class="cps-stage__title">{html.escape(title)}</div>'
+        '<div class="cps-stage__grid">'
+        '<div class="cps-stage__label">Objective</div>'
+        f'<div class="cps-stage__value">{html.escape(objective)}</div>'
+        '<div class="cps-stage__label">Evidence produced</div>'
+        f'<div class="cps-stage__value">{html.escape(deliverable)}</div>'
+        '</div></section>'
     )
 
 
@@ -169,10 +255,7 @@ def display_probe_summary(root: str | Path, *, top_n: int = 8) -> dict[str, Any]
 
     figure_width = max(6.5, 1.15 * len(labels) + 2.0)
     figure_height = max(4.8, 0.9 * len(labels) + 1.5)
-    figure, axis = plt.subplots(
-        figsize=(figure_width, figure_height),
-        constrained_layout=True,
-    )
+    figure, axis = plt.subplots(figsize=(figure_width, figure_height), constrained_layout=True)
     image = axis.imshow(np.abs(matrix))
     title = "Magnitude of the projected optimizer-state Jacobian"
     if shared_block is not None:
@@ -182,12 +265,7 @@ def display_probe_summary(root: str | Path, *, top_n: int = 8) -> dict[str, Any]
     axis.set_ylabel("target basis mode")
     rotation = 0 if max((len(label) for label in labels), default=0) <= 14 else 30
     horizontal_alignment = "center" if rotation == 0 else "right"
-    axis.set_xticks(
-        range(len(labels)),
-        labels,
-        rotation=rotation,
-        ha=horizontal_alignment,
-    )
+    axis.set_xticks(range(len(labels)), labels, rotation=rotation, ha=horizontal_alignment)
     axis.set_yticks(range(len(labels)), labels)
     axis.tick_params(axis="both", labelsize=9)
     figure.colorbar(image, ax=axis, label="|Âᵢⱼ|")
