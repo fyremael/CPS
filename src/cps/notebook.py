@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import json
 import platform
 import shutil
@@ -17,6 +18,78 @@ def _display_markdown(text: str) -> None:
         display(Markdown(text))
     except ImportError:  # pragma: no cover - notebook convenience
         print(text)
+
+
+def _display_html(text: str) -> None:
+    try:
+        from IPython.display import HTML, display
+
+        display(HTML(text))
+    except ImportError:  # pragma: no cover - notebook convenience
+        print(text)
+
+
+def apply_release_theme() -> None:
+    """Install the restrained visual language used by CPS release notebooks."""
+
+    _display_html(
+        """
+<style>
+:root {
+  --cps-ink: #17212b;
+  --cps-muted: #596574;
+  --cps-accent: #315f78;
+  --cps-surface: #f6f8fa;
+  --cps-line: #d8dee5;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --cps-ink: #e8edf2;
+    --cps-muted: #b3bdc7;
+    --cps-accent: #83b6cf;
+    --cps-surface: #17212b;
+    --cps-line: #3a4652;
+  }
+}
+.cps-stage {
+  margin: 1.35rem 0 1rem;
+  padding: 1rem 1.15rem 1.05rem;
+  border: 1px solid var(--cps-line);
+  border-left: 4px solid var(--cps-accent);
+  border-radius: 8px;
+  background: var(--cps-surface);
+  color: var(--cps-ink);
+}
+.cps-stage__index {
+  margin-bottom: .35rem;
+  color: var(--cps-accent);
+  font-size: .74rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.cps-stage__title {
+  margin: 0 0 .75rem;
+  font-size: 1.22rem;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+.cps-stage__grid {
+  display: grid;
+  grid-template-columns: minmax(7rem, .28fr) 1fr;
+  gap: .42rem .9rem;
+  font-size: .94rem;
+  line-height: 1.5;
+}
+.cps-stage__label {
+  color: var(--cps-muted);
+  font-weight: 650;
+}
+.cps-stage__value { color: var(--cps-ink); }
+.output_html table { font-size: .94rem; }
+</style>
+        """
+    )
 
 
 def lesson(title: str, body: str) -> None:
@@ -39,10 +112,16 @@ def stage_banner(
 ) -> None:
     """Render a uniform Grand Challenge stage boundary."""
 
-    _display_markdown(
-        f"---\n\n## Stage {stage} — {title}\n\n"
-        f"**Objective.** {objective}\n\n"
-        f"**Deliverable.** {deliverable}\n\n---"
+    _display_html(
+        "<section class="cps-stage">"
+        f"<div class="cps-stage__index">Stage {html.escape(str(stage))}</div>"
+        f"<div class="cps-stage__title">{html.escape(title)}</div>"
+        "<div class="cps-stage__grid">"
+        "<div class="cps-stage__label">Objective</div>"
+        f"<div class="cps-stage__value">{html.escape(objective)}</div>"
+        "<div class="cps-stage__label">Evidence produced</div>"
+        f"<div class="cps-stage__value">{html.escape(deliverable)}</div>"
+        "</div></section>"
     )
 
 

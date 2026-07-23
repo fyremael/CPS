@@ -95,6 +95,8 @@ The seven Colab notebooks are written as executable lessons rather than opaque l
 
 The Pythia-70M notebook also explains the fused-SDPA forward-AD limitation and displays whether the run used exact `torch.func.jvp` or the declared centered finite-difference fallback.
 
+The editorial, visual, self-containment, and export requirements are specified in [`docs/NOTEBOOK_RELEASE_STYLE.md`](docs/NOTEBOOK_RELEASE_STYLE.md).
+
 ## Native optimizer states
 
 The Transformers-compatible Pythia repositories and the native GPT-NeoX optimizer-state repositories do not necessarily expose the same Hub refs. A semantic request for the final checkpoint remains `step143000`, but a current native repository may store those files only on `main`.
