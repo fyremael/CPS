@@ -1,0 +1,312 @@
+name: Apply notebook tone polish
+
+on:
+  push:
+    branches: [polish/notebook-release-tone]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: polish/notebook-release-tone
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply final wording and visual-tone pass
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import re
+          import uuid
+          from pathlib import Path
+
+          ROOT = Path('.')
+          NOTEBOOKS = ROOT / 'notebooks'
+
+          copy = {
+              '00_instrument_smoke.ipynb': {
+                  'title': '# 00 · Instrument calibration',
+                  'lead': 'Calibrate the CPS instrument before asking it to support a model-level claim. This notebook checks the software path, core mathematical contracts, and the synthetic reference experiment.',
+                  'question': 'Does this runtime reproduce the CPS instrument contracts and synthetic reference behavior?',
+                  'path': 'Run a focused unit-test slice, then execute the controlled synthetic quadratic experiment.',
+                  'boundary': 'A pass establishes implementation readiness. It does not establish an empirical claim about Pythia training.',
+                  'outputs': 'Test results, synthetic evidence artifacts, and `/content/cps-export.zip`.',
+                  'checklist': [
+                      'Confirm that CPS imports from the checked-out repository source tree.',
+                      'Treat any failed contract test as an instrument failure; do not interpret later model notebooks until it is repaired.',
+                      'Verify that the synthetic experiment emits a complete evidence packet before export.',
+                  ],
+              },
+              '01_pythia_70m_probe.ipynb': {
+                  'title': '# 01 · Single-checkpoint probe',
+                  'lead': 'Measure the local projected optimizer-state dynamics of Pythia-70M and learn how to read the resulting operator, coupling table, and evidence manifest.',
+                  'question': 'What local coupling structure does CPS measure at one compact Pythia-70M checkpoint?',
+                  'path': 'Run the governed smoke configuration with reconstructed Adam moments and a compact semantic basis.',
+                  'boundary': 'This validates the real-model measurement path. Reconstructed moments are not a claim about historical native optimizer state.',
+                  'outputs': 'Manifest, basis registry, reduced operator, ranked couplings, figures, and export archive.',
+                  'checklist': [
+                      'Read projection closure before interpreting spectral radius or transient gain.',
+                      'Verify the active attention and JVP backends recorded in the manifest.',
+                      'Treat strong couplings as diagnostic leads, not as interventions or causal findings.',
+                  ],
+              },
+              '02_pythia_longitudinal.ipynb': {
+                  'title': '# 02 · Longitudinal campaign',
+                  'lead': 'Repeat one governed CPS contract across a checkpoint sequence to distinguish developmental structure from a single-checkpoint anecdote.',
+                  'question': 'How do local coupling and stability diagnostics change over the course of training?',
+                  'path': 'Run a deliberately small default revision grid; broaden it through `CPS_REVISIONS` when the runtime budget permits.',
+                  'boundary': 'A descriptive trajectory becomes predictive evidence only under prospective thresholds and held-out future events.',
+                  'outputs': 'One evidence packet per checkpoint, a longitudinal summary, comparison views, and export archive.',
+                  'checklist': [
+                      'Confirm that every requested revision produced its own immutable evidence root.',
+                      'Interpret diagnostic changes alongside projection quality and backend provenance.',
+                      'Do not select an apparently interesting checkpoint after inspecting downstream outcomes.',
+                  ],
+              },
+              '03_polypythia_seed_study.ipynb': {
+                  'title': '# 03 · Seed replication',
+                  'lead': 'Apply one CPS measurement contract across independent PolyPythia seeds to separate repeatable structure from initialization and data-order variation.',
+                  'question': 'Which CPS signatures persist across independently trained seeds?',
+                  'path': 'Run two seeds as a Colab-scale demonstration; expand the panel before making a variance claim.',
+                  'boundary': 'Two seeds validate the replication harness. They do not estimate the population distribution.',
+                  'outputs': 'One evidence packet per seed, a manifest-level comparison, and export archive.',
+                  'checklist': [
+                      'Verify that checkpoint, basis, data, JVP, and sweep contracts are identical across seeds.',
+                      'Interpret seed differences as variance evidence rather than automatic instrument failure.',
+                      'Reserve distributional language for a materially broader seed panel.',
+                  ],
+              },
+              '04_native_optimizer_state.ipynb': {
+                  'title': '# 04 · Native-state reconstruction',
+                  'lead': 'Reconstruct the released GPT-NeoX Adam moments, validate their coverage and naming contract, and run CPS against historical optimizer state.',
+                  'question': 'Can the released native packet be reconstructed and aligned safely enough for a historical CPS probe?',
+                  'path': 'Resolve the requested revision, download the native shards, reconcile metadata, and measure only parameter classes whose moments are present.',
+                  'boundary': 'The reader fails closed for unavailable parameter classes, ambiguous names, incompatible shapes, or inconsistent capacities.',
+                  'outputs': 'Download manifest, native reconstruction contract, CPS evidence packet, figures, and export archive.',
+                  'checklist': [
+                      'Confirm the resolved Hub revision and inferred training step before reconstruction.',
+                      'Read moment coverage, name alignment, shape source, and optimizer-group metadata before interpreting the operator.',
+                      'Do not generalize from parameter classes absent from the released native packet.',
+                  ],
+              },
+              '05_cps_planning.ipynb': {
+                  'title': '# 05 · Intervention planning',
+                  'lead': 'Measure or deliberately reuse a compact CPS packet, score the declared control family, and preserve a prospective continuation hypothesis before outcomes are visible.',
+                  'question': 'Which candidate learning-rate scale minimizes the declared CPS surrogate risk on the measured operator?',
+                  'path': 'Generate a compact Pythia-70M packet internally. `CPS_EVIDENCE_PATH` remains an explicit optional reuse path.',
+                  'boundary': 'The recommendation is a preregistered continuation hypothesis, not a causal result.',
+                  'outputs': 'Evidence packet, complete candidate table, `planner_recommendation.json`, and export archive.',
+                  'checklist': [
+                      'Confirm whether the evidence packet was generated in this runtime or explicitly reused.',
+                      'Inspect the full candidate table rather than only the selected value.',
+                      'Preserve the recommendation before any continuation trajectory is inspected.',
+                  ],
+              },
+              '06_matched_continuation.ipynb': {
+                  'title': '# 06 · Matched continuation',
+                  'lead': 'Close the loop from measurement to intervention: obtain the packet, preregister the control, fork from identical state, compare paired trajectories, and preserve the complete evidence chain.',
+                  'question': 'Does the CPS-selected short-horizon control improve the declared continuation criteria under matched conditions?',
+                  'path': 'Generate the diagnostic packet and planner recommendation internally, then run baseline and intervention forks from identical weights and batches.',
+                  'boundary': 'One continuation is a mechanism test. General optimizer claims require multiple checkpoints, seeds, and prespecified acceptance criteria.',
+                  'outputs': 'Diagnostic packet, planner recommendation, paired trajectories, summary metrics, and export archive.',
+                  'checklist': [
+                      'Verify that the recommendation was written before either continuation fork ran.',
+                      'Confirm identical initial weights, token budget, and batch order across both forks.',
+                      'Report positive and negative outcomes without redefining the success criterion.',
+                  ],
+              },
+          }
+
+
+          def markdown(source: str) -> dict:
+              return {
+                  'cell_type': 'markdown',
+                  'id': uuid.uuid4().hex[:8],
+                  'metadata': {},
+                  'source': source.splitlines(keepends=True),
+              }
+
+
+          def contract_cells(name: str) -> list[dict]:
+              item = copy[name]
+              title = (
+                  f"{item['title']}\n\n"
+                  "**Grand Challenge Labs · Coupling-Phase Spectroscopy**\n\n"
+                  f"{item['lead']}\n"
+              )
+              contract = (
+                  "## Release contract\n\n"
+                  f"| Contract | Declared value |\n"
+                  f"|---|---|\n"
+                  f"| **Scientific question** | {item['question']} |\n"
+                  f"| **Default path** | {item['path']} |\n"
+                  f"| **Evidence boundary** | {item['boundary']} |\n"
+                  f"| **Primary outputs** | {item['outputs']} |\n"
+              )
+              checklist = (
+                  "## Interpretation checklist\n\n"
+                  + ''.join(f"- [ ] {entry}\n" for entry in item['checklist'])
+              )
+              return [markdown(title), markdown(contract), markdown(checklist)]
+
+
+          def first_body_paragraph(text: str) -> str:
+              parts = text.split('\n\n', 1)
+              body = parts[1] if len(parts) == 2 else ''
+              paragraph = body.split('\n\n', 1)[0].strip()
+              paragraph = paragraph.replace('`', '').replace('**', '')
+              return ' '.join(paragraph.split()) or 'Execute the declared stage and preserve its evidence.'
+
+
+          def strip_stage_prefix(source: str) -> str:
+              lines = source.splitlines(keepends=True)
+              if len(lines) >= 2 and lines[0].strip() == 'from cps.notebook import stage_banner':
+                  # Release-stage banners were generated as a single call on the next line.
+                  if lines[1].lstrip().startswith('stage_banner('):
+                      index = 2
+                      while index < len(lines) and not lines[index].strip():
+                          index += 1
+                      return ''.join(lines[index:])
+              return source
+
+
+          for path in sorted(NOTEBOOKS.glob('*.ipynb')):
+              notebook = json.loads(path.read_text(encoding='utf-8'))
+              cells = notebook['cells']
+
+              # Replace the title, release contract, and checklist as one coherent editorial unit.
+              body = []
+              skipped = 0
+              for current in cells:
+                  text = ''.join(current.get('source', []))
+                  if skipped < 3 and current.get('cell_type') == 'markdown':
+                      skipped += 1
+                      continue
+                  body.append(current)
+              cells = contract_cells(path.name) + body
+
+              # Apply the shared release theme in the environment cell.
+              for current in cells:
+                  if current.get('cell_type') != 'code':
+                      continue
+                  source = ''.join(current.get('source', []))
+                  if 'show_environment' not in source:
+                      continue
+                  source = source.replace(
+                      'from cps.notebook import stage_banner\n',
+                      'from cps.notebook import apply_release_theme, stage_banner\n',
+                      1,
+                  )
+                  if 'apply_release_theme()' not in source:
+                      source = source.replace(
+                          'from cps.notebook import show_environment\n',
+                          'from cps.notebook import show_environment\napply_release_theme()\n',
+                          1,
+                      )
+                  current['source'] = source.splitlines(keepends=True)
+                  break
+
+              # Regenerate each runtime stage card from the visible stage copy without mangling punctuation.
+              for index, current in enumerate(cells):
+                  if current.get('cell_type') != 'code' or index == 0:
+                      continue
+                  previous = cells[index - 1]
+                  if previous.get('cell_type') != 'markdown':
+                      continue
+                  visible = ''.join(previous.get('source', []))
+                  match = re.search(r'^## Stage\s+([^—\n]+)\s*[—-]\s*(.+)$', visible, re.MULTILINE)
+                  if match is None:
+                      continue
+                  stage = match.group(1).strip()
+                  title = match.group(2).strip()
+                  objective = first_body_paragraph(visible)
+                  source = strip_stage_prefix(''.join(current.get('source', [])))
+                  prefix = (
+                      'from cps.notebook import stage_banner\n'
+                      f'stage_banner({stage!r}, {title!r}, objective={objective!r}, '
+                      'deliverable="A verified stage result recorded in the evidence packet.")\n\n'
+                  )
+                  current['source'] = (prefix + source).splitlines(keepends=True)
+
+              for current in cells:
+                  current.setdefault('id', uuid.uuid4().hex[:8])
+                  if current.get('cell_type') == 'code':
+                      current['execution_count'] = None
+                      current['outputs'] = []
+              notebook['cells'] = cells
+              path.write_text(json.dumps(notebook, indent=1) + '\n', encoding='utf-8')
+
+          notebook_module = ROOT / 'src/cps/notebook.py'
+          text = notebook_module.read_text(encoding='utf-8')
+          text = text.replace('import json\n', 'import html\nimport json\n', 1)
+
+          markdown_anchor = '''def _display_markdown(text: str) -> None:\n    try:\n        from IPython.display import Markdown, display\n\n        display(Markdown(text))\n    except ImportError:  # pragma: no cover - notebook convenience\n        print(text)\n\n\n'''
+          html_helper = '''def _display_html(text: str) -> None:\n    try:\n        from IPython.display import HTML, display\n\n        display(HTML(text))\n    except ImportError:  # pragma: no cover - notebook convenience\n        print(text)\n\n\ndef apply_release_theme() -> None:\n    """Install the restrained visual language used by CPS release notebooks."""\n\n    _display_html(\n        """\n<style>\n:root {\n  --cps-ink: #17212b;\n  --cps-muted: #596574;\n  --cps-accent: #315f78;\n  --cps-surface: #f6f8fa;\n  --cps-line: #d8dee5;\n}\n@media (prefers-color-scheme: dark) {\n  :root {\n    --cps-ink: #e8edf2;\n    --cps-muted: #b3bdc7;\n    --cps-accent: #83b6cf;\n    --cps-surface: #17212b;\n    --cps-line: #3a4652;\n  }\n}\n.cps-stage {\n  margin: 1.35rem 0 1rem;\n  padding: 1rem 1.15rem 1.05rem;\n  border: 1px solid var(--cps-line);\n  border-left: 4px solid var(--cps-accent);\n  border-radius: 8px;\n  background: var(--cps-surface);\n  color: var(--cps-ink);\n}\n.cps-stage__index {\n  margin-bottom: .35rem;\n  color: var(--cps-accent);\n  font-size: .74rem;\n  font-weight: 700;\n  letter-spacing: .12em;\n  text-transform: uppercase;\n}\n.cps-stage__title {\n  margin: 0 0 .75rem;\n  font-size: 1.22rem;\n  font-weight: 650;\n  letter-spacing: -.01em;\n}\n.cps-stage__grid {\n  display: grid;\n  grid-template-columns: minmax(7rem, .28fr) 1fr;\n  gap: .42rem .9rem;\n  font-size: .94rem;\n  line-height: 1.5;\n}\n.cps-stage__label {\n  color: var(--cps-muted);\n  font-weight: 650;\n}\n.cps-stage__value { color: var(--cps-ink); }\n.output_html table { font-size: .94rem; }\n</style>\n        """\n    )\n\n\n'''
+          if 'def apply_release_theme(' not in text:
+              if markdown_anchor not in text:
+                  raise SystemExit('notebook display helper anchor not found')
+              text = text.replace(markdown_anchor, markdown_anchor + html_helper, 1)
+
+          old_banner = '''def stage_banner(\n    stage: str,\n    title: str,\n    *,\n    objective: str,\n    deliverable: str,\n) -> None:\n    """Render a uniform Grand Challenge stage boundary."""\n\n    _display_markdown(\n        f"---\\n\\n## Stage {stage} — {title}\\n\\n"\n        f"**Objective.** {objective}\\n\\n"\n        f"**Deliverable.** {deliverable}\\n\\n---"\n    )\n'''
+          new_banner = '''def stage_banner(\n    stage: str,\n    title: str,\n    *,\n    objective: str,\n    deliverable: str,\n) -> None:\n    """Render a uniform Grand Challenge stage boundary."""\n\n    _display_html(\n        "<section class=\"cps-stage\">"\n        f"<div class=\"cps-stage__index\">Stage {html.escape(str(stage))}</div>"\n        f"<div class=\"cps-stage__title\">{html.escape(title)}</div>"\n        "<div class=\"cps-stage__grid\">"\n        "<div class=\"cps-stage__label\">Objective</div>"\n        f"<div class=\"cps-stage__value\">{html.escape(objective)}</div>"\n        "<div class=\"cps-stage__label\">Evidence produced</div>"\n        f"<div class=\"cps-stage__value\">{html.escape(deliverable)}</div>"\n        "</div></section>"\n    )\n'''
+          if old_banner not in text:
+              raise SystemExit('stage banner implementation anchor not found')
+          notebook_module.write_text(text.replace(old_banner, new_banner, 1), encoding='utf-8')
+
+          docs = ROOT / 'docs/NOTEBOOK_RELEASE_STYLE.md'
+          docs.write_text('''# CPS notebook release standard\n\nThe Colab notebooks are public research instruments. They must be easy to enter, difficult to misread, and complete enough to execute from a fresh runtime.\n\n## Required structure\n\nEvery release notebook contains, in this order:\n\n1. a numbered title and one-sentence purpose;\n2. a release contract stating the scientific question, default path, evidence boundary, and outputs;\n3. an interpretation checklist;\n4. a repository/bootstrap cell;\n5. a visible runtime inventory;\n6. numbered stages with declared objectives and evidence products;\n7. a single export step producing `/content/cps-export.zip`.\n\n## Language doctrine\n\n- State the scientific question before implementation details.\n- Distinguish measurement, hypothesis, intervention, and evidence.\n- Use prospective language for planner outputs.\n- Name limitations at the point where a result could be overread.\n- Prefer concrete nouns and verbs over promotional language.\n- Report negative or partial outcomes without changing the acceptance criterion.\n\n## Visual doctrine\n\nThe visual system is restrained and functional. Stage cards use one accent, one neutral surface, strong typographic hierarchy, and no decorative illustration. Tables and figures carry the scientific content; styling only clarifies navigation and evidence boundaries. The theme supports light and dark system preferences.\n\n## Self-containment contract\n\nA notebook must execute from a fresh Colab runtime using the repository revision and declared public data sources. A previous notebook may provide an optional cache or evidence packet, but it may not be required unless the notebook explicitly declares itself as a campaign continuation artifact.\n\n## Export contract\n\nEvery notebook writes its products beneath `/content/cps-artifacts` and ends by creating `/content/cps-export.zip`. The archive must include enough metadata to determine the model revision, evidence class, active backends, configuration, and generated result files.\n\n## Acceptance checklist\n\nA notebook is release-ready only when:\n\n- all code cells compile;\n- the notebook validator passes;\n- self-containment tests pass;\n- stage numbering and visible runtime banners agree;\n- evidence boundaries are explicit;\n- the export path is consistent;\n- no output claims exceed the executed evidence.\n''', encoding='utf-8')
+
+          readme = ROOT / 'README.md'
+          readme_text = readme.read_text(encoding='utf-8')
+          anchor = 'The Pythia-70M notebook also explains the fused-SDPA forward-AD limitation and displays whether the run used exact `torch.func.jvp` or the declared centered finite-difference fallback.\n'
+          addition = '\nThe editorial, visual, self-containment, and export requirements are specified in [`docs/NOTEBOOK_RELEASE_STYLE.md`](docs/NOTEBOOK_RELEASE_STYLE.md).\n'
+          if addition.strip() not in readme_text:
+              if anchor not in readme_text:
+                  raise SystemExit('README notebook-pedagogy anchor not found')
+              readme.write_text(readme_text.replace(anchor, anchor + addition, 1), encoding='utf-8')
+
+          tests = ROOT / 'tests/test_notebook_release_style.py'
+          test_text = tests.read_text(encoding='utf-8')
+          test_text = test_text.replace(
+              'assert "stage_banner(" in text\n',
+              'assert "stage_banner(" in text\n        assert "apply_release_theme()" in text\n',
+          )
+          test_text += '''\n\ndef test_release_titles_are_numbered_and_concise():\n    for index, path in enumerate(sorted(Path("notebooks").glob("*.ipynb"))):\n        notebook = nbformat.read(path, as_version=4)\n        first_line = notebook.cells[0].source.splitlines()[0]\n        assert first_line.startswith(f"# {index:02d} · ")\n\n\ndef test_release_style_document_is_present():\n    text = Path("docs/NOTEBOOK_RELEASE_STYLE.md").read_text(encoding="utf-8")\n    assert "Self-containment contract" in text\n    assert "/content/cps-export.zip" in text\n'''
+          tests.write_text(test_text, encoding='utf-8')
+
+          presentation_tests = ROOT / 'tests/test_notebook_presentation.py'
+          presentation_tests.write_text('''from cps import notebook\n\n\ndef test_release_theme_renders_css(monkeypatch):\n    captured = []\n    monkeypatch.setattr(notebook, "_display_html", captured.append)\n    notebook.apply_release_theme()\n    assert captured\n    assert ".cps-stage" in captured[0]\n\n\ndef test_stage_banner_escapes_content(monkeypatch):\n    captured = []\n    monkeypatch.setattr(notebook, "_display_html", captured.append)\n    notebook.stage_banner(\n        "1",\n        "Measure <operator>",\n        objective="Preserve A & B",\n        deliverable="packet",\n    )\n    rendered = captured[0]\n    assert "Measure &lt;operator&gt;" in rendered\n    assert "A &amp; B" in rendered\n    assert "Evidence produced" in rendered\n''', encoding='utf-8')
+
+          pyproject = ROOT / 'pyproject.toml'
+          project = pyproject.read_text(encoding='utf-8')
+          if 'version = "0.2.14"' not in project:
+              raise SystemExit('expected CPS version 0.2.14')
+          pyproject.write_text(project.replace('version = "0.2.14"', 'version = "0.2.15"', 1), encoding='utf-8')
+          PY
+      - name: Commit implementation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md docs/NOTEBOOK_RELEASE_STYLE.md notebooks src/cps/notebook.py tests/test_notebook_release_style.py tests/test_notebook_presentation.py pyproject.toml
+          git commit -m 'Polish notebook wording and visual tone'
+          git push origin HEAD:polish/notebook-release-tone
+      - name: Validate polished release suite
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev,notebooks]'
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install pandas
+          pytest -q
+          python scripts/validate_notebooks.py
+          python -m compileall -q src scripts tests
+          python -m build
