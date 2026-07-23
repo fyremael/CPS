@@ -13,7 +13,7 @@ def test_all_notebooks_are_release_grade_and_export_consistently():
     assert len(paths) == 7
     for path in paths:
         text = notebook_text(path)
-        assert "Grand Challenge release notebook" in text
+        assert "Grand Challenge Labs · Coupling-Phase Spectroscopy" in text
         assert "## Release contract" in text
         assert "## Interpretation checklist" in text
         assert "stage_banner(" in text
@@ -37,9 +37,12 @@ def test_release_titles_are_numbered_and_concise():
         notebook = nbformat.read(path, as_version=4)
         first_line = notebook.cells[0].source.splitlines()[0]
         assert first_line.startswith(f"# {index:02d} · ")
+        assert len(first_line) <= 48
 
 
 def test_release_style_document_is_present():
     text = Path("docs/NOTEBOOK_RELEASE_STYLE.md").read_text(encoding="utf-8")
+    assert "Language doctrine" in text
+    assert "Visual doctrine" in text
     assert "Self-containment contract" in text
     assert "/content/cps-export.zip" in text
