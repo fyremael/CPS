@@ -1,0 +1,501 @@
+name: Apply release-grade notebook pass
+
+on:
+  push:
+    branches: [release/colab-notebook-pedagogy]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/colab-notebook-pedagogy
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply release-grade notebook transformation
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import re
+          import uuid
+          from pathlib import Path
+
+          ROOT = Path('.')
+          NOTEBOOKS = ROOT / 'notebooks'
+
+          metadata = {
+              '00_instrument_smoke.ipynb': {
+                  'title': 'CPS instrument calibration',
+                  'intro': 'This is the entry-level systems check. It validates package installation, core mathematical contracts, and the synthetic instrument before any model checkpoint is downloaded.',
+                  'question': 'Is the CPS software and mathematical instrument functioning correctly in this runtime?',
+                  'default': 'Run a focused unit-test slice and a controlled synthetic quadratic experiment.',
+                  'boundary': 'A pass validates the implementation and synthetic fixtures; it does not establish an empirical claim about Pythia training.',
+                  'outputs': '`/content/cps-artifacts` and `/content/cps-export.zip`.',
+                  'checklist': [
+                      'Confirm that CPS imports from `/content/CPS/src`, not from an unrelated installation.',
+                      'Treat a failing unit test as an instrument failure; do not interpret later model results until it is repaired.',
+                      'Verify that the synthetic run emits an evidence packet before exporting.',
+                  ],
+              },
+              '01_pythia_70m_probe.ipynb': {
+                  'title': 'Pythia-70M projected optimizer-state probe',
+                  'intro': 'This notebook runs the smallest real-model CPS measurement and teaches the complete path from model state to reduced operator and phase-sensitive coupling diagnostics.',
+                  'question': 'What local coupling structure does CPS measure around a compact Pythia-70M optimizer-state update?',
+                  'default': 'Run the governed Pythia-70M smoke configuration with reconstructed Adam moments.',
+                  'boundary': 'This validates the real-model measurement path, but reconstructed moments are not a historical native-state claim.',
+                  'outputs': 'Manifest, basis registry, reduced operator, coupling records, figures, and export archive.',
+                  'checklist': [
+                      'Read projection closure before interpreting spectral or transient-risk measurements.',
+                      'Verify the recorded attention and JVP backends in the manifest.',
+                      'Treat the strongest couplings as diagnostic leads, not as interventions.',
+                  ],
+              },
+              '02_pythia_longitudinal.ipynb': {
+                  'title': 'Pythia longitudinal CPS campaign',
+                  'intro': 'This notebook repeats one governed probe contract across a checkpoint sequence so developmental changes can be distinguished from one-checkpoint anecdotes.',
+                  'question': 'How do local coupling and stability diagnostics evolve over training?',
+                  'default': 'Run a deliberately small checkpoint grid; expand it with `CPS_REVISIONS` only when runtime permits.',
+                  'boundary': 'A descriptive longitudinal curve becomes predictive evidence only under prospective thresholds and held-out future events.',
+                  'outputs': 'One evidence packet per checkpoint, a longitudinal summary, comparison tables and plots, and an export archive.',
+                  'checklist': [
+                      'Confirm that every requested revision produced an independent evidence root.',
+                      'Compare diagnostic changes only alongside projection quality and backend provenance.',
+                      'Do not select a compelling checkpoint after inspecting downstream outcomes.',
+                  ],
+              },
+              '03_polypythia_seed_study.ipynb': {
+                  'title': 'PolyPythia seed-replication study',
+                  'intro': 'This notebook applies one CPS contract across multiple PolyPythia seeds to separate repeatable structure from initialization and data-order variability.',
+                  'question': 'Is a measured CPS signature stable across independent training seeds?',
+                  'default': 'Run two seeds as a harness demonstration; use a broader seed panel for variance claims.',
+                  'boundary': 'Two seeds test the pipeline, not the population distribution.',
+                  'outputs': 'One immutable packet per seed, a manifest-level comparison table, and an export archive.',
+                  'checklist': [
+                      'Verify that checkpoint, data, basis, JVP, and sweep contracts are identical across seeds.',
+                      'Interpret seed differences as variance evidence rather than automatic instrument failure.',
+                      'Do not describe a two-seed comparison as a variance estimate.',
+                  ],
+              },
+              '04_native_optimizer_state.ipynb': {
+                  'title': 'Native Pythia optimizer-state reconstruction',
+                  'intro': 'This notebook reconstructs released GPT-NeoX Adam moments, validates the native packet contract, and measures CPS on historical optimizer state.',
+                  'question': 'Can the released native checkpoint be reconstructed and aligned safely enough for a historical CPS probe?',
+                  'default': 'Download the final Pythia-70M native packet, reconcile its metadata and moment coverage, then run the selected matrix-weight probe.',
+                  'boundary': 'The reader fails closed for unavailable parameter classes, ambiguous names, incompatible shapes, or inconsistent capacities.',
+                  'outputs': 'Native download manifest, reconstruction contract, CPS evidence packet, diagnostic figures, and export archive.',
+                  'checklist': [
+                      'Confirm the resolved Hub revision and inferred training step before reconstruction.',
+                      'Read native moment coverage, name alignment, and shape-source metadata before interpreting the operator.',
+                      'A partial native packet supports only parameter classes whose moments are actually present.',
+                  ],
+              },
+              '05_cps_planning.ipynb': {
+                  'title': 'CPS intervention planning',
+                  'intro': 'This self-contained notebook measures or reuses a compact CPS packet and converts its fragile couplings into a preregistered scalar control hypothesis.',
+                  'question': 'Which candidate learning-rate scale minimizes the declared CPS surrogate risk on the measured reduced operator?',
+                  'default': 'Generate a compact Pythia-70M packet internally; `CPS_EVIDENCE_PATH` is an optional reuse path.',
+                  'boundary': 'The planner recommendation is a prospective continuation hypothesis, not a causal result.',
+                  'outputs': 'Evidence packet, legible candidate table, `planner_recommendation.json`, and export archive.',
+                  'checklist': [
+                      'Confirm whether the packet was generated locally or explicitly reused.',
+                      'Inspect all candidate scores rather than only the selected winner.',
+                      'Preserve the recommendation before inspecting continuation outcomes.',
+                  ],
+              },
+              '06_matched_continuation.ipynb': {
+                  'title': 'CPS matched continuation test',
+                  'intro': 'This self-contained notebook closes the diagnostic loop: measure, plan, preregister, fork, compare, and preserve the complete evidence chain.',
+                  'question': 'Does the CPS-selected short-horizon intervention improve the declared continuation criteria under matched conditions?',
+                  'default': 'Generate a compact packet and recommendation internally, then run baseline and intervention forks from identical weights and batches.',
+                  'boundary': 'One continuation is a mechanism test; multiple checkpoints and seeds are required for a general optimizer claim.',
+                  'outputs': 'Diagnostic packet, preregistered recommendation, paired continuation trajectories, summary metrics, and export archive.',
+                  'checklist': [
+                      'Verify that the recommendation was written before the continuation fork ran.',
+                      'Confirm that both forks used identical initial weights, token budget, and batch order.',
+                      'Report both positive and negative intervention results without changing the success criterion.',
+                  ],
+              },
+          }
+
+
+          def cell(kind: str, source: str) -> dict:
+              payload = {
+                  'cell_type': kind,
+                  'id': uuid.uuid4().hex[:8],
+                  'metadata': {},
+                  'source': source.splitlines(keepends=True),
+              }
+              if kind == 'code':
+                  payload.update({'execution_count': None, 'outputs': []})
+              return payload
+
+
+          def first_paragraph(markdown: str) -> str:
+              lines = [line.strip() for line in markdown.splitlines()]
+              content = []
+              for line in lines[1:]:
+                  if not line:
+                      if content:
+                          break
+                      continue
+                  if line.startswith('#'):
+                      continue
+                  content.append(line)
+              text = ' '.join(content)
+              return re.sub(r'[`*_>#-]+', '', text).strip() or 'Execute the governed stage and record its outputs.'
+
+
+          def release_cells(name: str) -> list[dict]:
+              item = metadata[name]
+              title = (
+                  f"# {item['title']}\n\n"
+                  "**Grand Challenge release notebook.** " + item['intro'] + "\n"
+              )
+              contract = (
+                  "## Release contract\n\n"
+                  f"- **Scientific question:** {item['question']}\n"
+                  f"- **Default execution path:** {item['default']}\n"
+                  f"- **Evidence boundary:** {item['boundary']}\n"
+                  f"- **Primary outputs:** {item['outputs']}\n"
+              )
+              checklist = "## Interpretation checklist\n\n" + ''.join(
+                  f"- {entry}\n" for entry in item['checklist']
+              )
+              return [cell('markdown', title), cell('markdown', contract), cell('markdown', checklist)]
+
+
+          def add_stage_runtime(cells: list[dict]) -> None:
+              for index, current in enumerate(cells):
+                  if current.get('cell_type') != 'code':
+                      continue
+                  source = ''.join(current.get('source', []))
+                  if 'stage_banner(' in source:
+                      continue
+                  previous = cells[index - 1] if index else None
+                  if not previous or previous.get('cell_type') != 'markdown':
+                      continue
+                  markdown = ''.join(previous.get('source', []))
+                  match = re.search(r'^## Stage\s+([^—\n]+)\s*[—-]\s*(.+)$', markdown, re.MULTILINE)
+                  if not match:
+                      continue
+                  stage = match.group(1).strip()
+                  title = match.group(2).strip()
+                  objective = first_paragraph(markdown).replace('"', "'")
+                  prefix = (
+                      'from cps.notebook import stage_banner\n'
+                      f'stage_banner({stage!r}, {title!r}, objective={objective!r}, '
+                      f'deliverable="The artifacts and console evidence described in this stage.")\n\n'
+                  )
+                  current['source'] = (prefix + source).splitlines(keepends=True)
+
+
+          def standardize_export(cells: list[dict]) -> None:
+              export_index = None
+              for index in range(len(cells) - 1, -1, -1):
+                  current = cells[index]
+                  if current.get('cell_type') == 'code' and 'export_artifacts' in ''.join(current.get('source', [])):
+                      export_index = index
+                      break
+              export_markdown = cell(
+                  'markdown',
+                  '## Final stage — export the evidence packet\n\n'
+                  'Every release notebook ends with the same preservation step. The archive contains the evidence produced in this runtime and is suitable for Colab CLI retrieval or manual download.\n',
+              )
+              export_code = cell(
+                  'code',
+                  'from cps.notebook import export_artifacts, stage_banner\n\n'
+                  'stage_banner(\n'
+                  '    "EXPORT",\n'
+                  '    "Package the evidence",\n'
+                  '    objective="Collect the run artifacts into one portable archive.",\n'
+                  '    deliverable="/content/cps-export.zip",\n'
+                  ')\n'
+                  'archive = export_artifacts()\n'
+                  'print(f"[EXPORT] archive={archive}", flush=True)\n',
+              )
+              if export_index is None:
+                  cells.extend([export_markdown, export_code])
+                  return
+              if export_index > 0 and cells[export_index - 1].get('cell_type') == 'markdown':
+                  cells[export_index - 1] = export_markdown
+              else:
+                  cells.insert(export_index, export_markdown)
+                  export_index += 1
+              cells[export_index] = export_code
+
+
+          def make_planning_self_contained(cells: list[dict]) -> None:
+              for index, current in enumerate(cells):
+                  source = ''.join(current.get('source', []))
+                  if current.get('cell_type') == 'code' and 'def reduced_operators_below' in source:
+                      cells[index] = cell(
+                          'code',
+                          'import os\n'
+                          'from cps.pythia.notebook_support import load_evidence_packet, run_self_contained_probe\n\n'
+                          'evidence_path = os.environ.get("CPS_EVIDENCE_PATH")\n'
+                          'if evidence_path:\n'
+                          '    print(f"[PLAN] Reusing explicit evidence: {evidence_path}", flush=True)\n'
+                          '    packet = load_evidence_packet(evidence_path)\n'
+                          'else:\n'
+                          '    revision = os.environ.get("CPS_REVISION", "step0")\n'
+                          '    print(f"[PLAN] Running a self-contained compact probe at revision={revision}", flush=True)\n'
+                          '    generated_root = run_self_contained_probe(\n'
+                          '        revision=revision,\n'
+                          '        run_name="pythia-70m-planning",\n'
+                          '    )\n'
+                          '    packet = load_evidence_packet(generated_root)\n'
+                          'path = packet.reduced_operator_path\n'
+                          'A = packet.matrix\n'
+                          'print(f"[PLAN] evidence root={packet.root}", flush=True)\n'
+                          'print(f"[PLAN] shape={A.shape}; ||A||₂={__import__("numpy").linalg.norm(A, 2):.6g}", flush=True)\n',
+                      )
+                      if index > 0 and cells[index - 1].get('cell_type') == 'markdown':
+                          cells[index - 1] = cell(
+                              'markdown',
+                              '## Stage 1 — obtain the evidence packet\n\n'
+                              'The default path is fully self-contained: run a compact Pythia-70M probe and plan against the packet it emits. Set `CPS_EVIDENCE_PATH` only to reuse a deliberate external packet or ZIP archive.\n',
+                          )
+                  if current.get('cell_type') == 'code' and 'score_frame=pd.DataFrame' in source:
+                      cells[index] = cell(
+                          'code',
+                          'import numpy as np\n'
+                          'import pandas as pd\n'
+                          'from IPython.display import display\n'
+                          'from cps.controllers import score_candidate\n'
+                          'from cps.pythia.notebook_support import select_candidate_edges\n'
+                          'from cps.pythia.planner import damping_family, plan_scalar_control\n\n'
+                          'edges = select_candidate_edges(packet, maximum=8)\n'
+                          'candidate_scales = [1.0, 0.98, 0.95, 0.90, 0.80]\n'
+                          'rows = []\n'
+                          'for scale in candidate_scales:\n'
+                          '    gamma = 1.0 - scale\n'
+                          '    score = score_candidate(damping_family(A, gamma), edges)\n'
+                          '    rows.append({\n'
+                          '        "learning-rate scale": scale,\n'
+                          '        "surrogate damping γ": gamma,\n'
+                          '        "risk": score.risk,\n'
+                          '        "spectral radius": score.spectral_radius,\n'
+                          '        "transient gain": score.transient_gain,\n'
+                          '        "minimum gap": score.minimum_gap,\n'
+                          '    })\n'
+                          'score_frame = pd.DataFrame(rows).sort_values("risk")\n'
+                          'display(score_frame)\n'
+                          'recommendation = plan_scalar_control(\n'
+                          '    "learning_rate_scale",\n'
+                          '    1.0,\n'
+                          '    candidate_scales,\n'
+                          '    lambda scale: damping_family(A, 1.0 - scale),\n'
+                          '    edges,\n'
+                          ')\n'
+                          'print("[PLAN] recommendation", recommendation.to_dict(), flush=True)\n',
+                      )
+                  if current.get('cell_type') == 'code' and 'planner_recommendation.json' in source:
+                      cells[index] = cell(
+                          'code',
+                          'from pathlib import Path\n'
+                          'from cps.pythia.notebook_support import write_planner_recommendation\n\n'
+                          'plan_root = Path("/content/cps-artifacts/planning")\n'
+                          'plan_root.mkdir(parents=True, exist_ok=True)\n'
+                          'plan_path = write_planner_recommendation(\n'
+                          '    plan_root,\n'
+                          '    recommendation,\n'
+                          '    selected_edges=edges,\n'
+                          '    candidate_grid=candidate_scales,\n'
+                          '    control_operationalization={\n'
+                          '        "surrogate_family": "isotropic_damping",\n'
+                          '        "translation": "gamma = 1 - learning_rate_scale",\n'
+                          '        "warning": "The matched continuation is the actual intervention test.",\n'
+                          '    },\n'
+                          ')\n'
+                          'print(f"[PLAN] preregistered recommendation={plan_path}", flush=True)\n',
+                      )
+
+
+          def make_continuation_self_contained(cells: list[dict]) -> None:
+              environment_index = next(
+                  index for index, current in enumerate(cells)
+                  if current.get('cell_type') == 'code' and 'show_environment' in ''.join(current.get('source', []))
+              )
+              additions = [
+                  cell(
+                      'markdown',
+                      '## Stage 1 — obtain the diagnostic packet\n\n'
+                      'The default path is self-contained: run a compact Pythia-70M probe. Set `CPS_EVIDENCE_PATH` only to reuse a deliberate external packet or ZIP archive.\n',
+                  ),
+                  cell(
+                      'code',
+                      'import os\n'
+                      'from cps.pythia.notebook_support import load_evidence_packet, run_self_contained_probe\n\n'
+                      'revision = os.environ.get("CPS_REVISION", "step1000")\n'
+                      'evidence_path = os.environ.get("CPS_EVIDENCE_PATH")\n'
+                      'if evidence_path:\n'
+                      '    print(f"[CONTINUATION] Reusing explicit evidence: {evidence_path}", flush=True)\n'
+                      '    packet = load_evidence_packet(evidence_path)\n'
+                      'else:\n'
+                      '    print(f"[CONTINUATION] Running compact probe at revision={revision}", flush=True)\n'
+                      '    generated_root = run_self_contained_probe(\n'
+                      '        revision=revision,\n'
+                      '        run_name="pythia-70m-continuation-plan",\n'
+                      '    )\n'
+                      '    packet = load_evidence_packet(generated_root)\n'
+                      'A = packet.matrix\n'
+                      'print(f"[CONTINUATION] diagnostic packet={packet.root}", flush=True)\n',
+                  ),
+                  cell(
+                      'markdown',
+                      '## Stage 2 — preregister the intervention\n\n'
+                      'Score the declared candidate family and preserve the selected learning-rate scale before either continuation fork is inspected.\n',
+                  ),
+                  cell(
+                      'code',
+                      'from pathlib import Path\n'
+                      'from cps.pythia.notebook_support import select_candidate_edges, write_planner_recommendation\n'
+                      'from cps.pythia.planner import damping_family, plan_scalar_control\n\n'
+                      'candidate_scales = [1.0, 0.98, 0.95, 0.90, 0.80]\n'
+                      'edges = select_candidate_edges(packet, maximum=8)\n'
+                      'recommendation = plan_scalar_control(\n'
+                      '    "learning_rate_scale",\n'
+                      '    1.0,\n'
+                      '    candidate_scales,\n'
+                      '    lambda scale: damping_family(A, 1.0 - scale),\n'
+                      '    edges,\n'
+                      ')\n'
+                      'plan_root = Path("/content/cps-artifacts/continuation-plan")\n'
+                      'plan_root.mkdir(parents=True, exist_ok=True)\n'
+                      'plan_path = write_planner_recommendation(\n'
+                      '    plan_root,\n'
+                      '    recommendation,\n'
+                      '    selected_edges=edges,\n'
+                      '    candidate_grid=candidate_scales,\n'
+                      '    control_operationalization={\n'
+                      '        "surrogate_family": "isotropic_damping",\n'
+                      '        "translation": "gamma = 1 - learning_rate_scale",\n'
+                      '        "warning": "The matched continuation is the actual intervention test.",\n'
+                      '    },\n'
+                      ')\n'
+                      'print(f"[CONTINUATION] preregistered recommendation={plan_path}", flush=True)\n'
+                      'print(f"[CONTINUATION] planned learning-rate scale={recommendation.recommended}", flush=True)\n',
+                  ),
+              ]
+              cells[environment_index + 1:environment_index + 1] = additions
+
+              for current in cells:
+                  if current.get('cell_type') == 'markdown':
+                      text = ''.join(current.get('source', []))
+                      text = text.replace('## Stage 1 — resolve the continuation contract', '## Stage 3 — resolve the continuation contract')
+                      text = text.replace('## Stage 2 — run both forks', '## Stage 4 — run both forks')
+                      text = text.replace('## Stage 3 — compare trajectories', '## Stage 5 — compare trajectories')
+                      current['source'] = text.splitlines(keepends=True)
+                  elif current.get('cell_type') == 'code':
+                      text = ''.join(current.get('source', []))
+                      if 'ContinuationConfig(' in text and 'learning_rate_scale=' in text:
+                          text = text.replace(
+                              'revision=os.environ.get("CPS_REVISION", "step1000"),',
+                              'revision=revision,',
+                          )
+                          text = text.replace(
+                              'learning_rate_scale=float(os.environ.get("CPS_LR_SCALE", "0.8")),',
+                              'learning_rate_scale=float(os.environ.get("CPS_LR_SCALE", str(recommendation.recommended))),',
+                          )
+                          current['source'] = text.splitlines(keepends=True)
+
+
+          for path in sorted(NOTEBOOKS.glob('*.ipynb')):
+              notebook = json.loads(path.read_text(encoding='utf-8'))
+              original_cells = notebook['cells']
+
+              # Strip any previous release-contract/checklist pass, preserving the scientific notebook body.
+              body = []
+              for index, current in enumerate(original_cells):
+                  text = ''.join(current.get('source', []))
+                  if index == 0:
+                      continue
+                  if current.get('cell_type') == 'markdown' and (
+                      text.startswith('## Release contract')
+                      or text.startswith('## Interpretation checklist')
+                  ):
+                      continue
+                  body.append(current)
+              notebook['cells'] = release_cells(path.name) + body
+
+              if path.name == '05_cps_planning.ipynb':
+                  make_planning_self_contained(notebook['cells'])
+              if path.name == '06_matched_continuation.ipynb':
+                  make_continuation_self_contained(notebook['cells'])
+
+              # Add a consistent environment-stage banner to the existing environment cell.
+              for current in notebook['cells']:
+                  if current.get('cell_type') == 'code' and 'show_environment' in ''.join(current.get('source', [])):
+                      source = ''.join(current['source'])
+                      if 'stage_banner(' not in source:
+                          current['source'] = (
+                              'from cps.notebook import stage_banner\n'
+                              'stage_banner(\n'
+                              '    "0",\n'
+                              '    "Record the runtime contract",\n'
+                              '    objective="Expose the software and accelerator environment before scientific execution.",\n'
+                              '    deliverable="A visible runtime inventory for reproducibility.",\n'
+                              ')\n'
+                              + source
+                          ).splitlines(keepends=True)
+                      break
+
+              add_stage_runtime(notebook['cells'])
+              standardize_export(notebook['cells'])
+              for current in notebook['cells']:
+                  current.setdefault('id', uuid.uuid4().hex[:8])
+                  if current.get('cell_type') == 'code':
+                      current['execution_count'] = None
+                      current['outputs'] = []
+              path.write_text(json.dumps(notebook, indent=1) + '\n', encoding='utf-8')
+
+          notebook_module = ROOT / 'src/cps/notebook.py'
+          text = notebook_module.read_text(encoding='utf-8')
+          anchor = '''def evidence_boundary(*items: str) -> None:\n    rendered = "\\n".join(f"- {item}" for item in items)\n    _display_markdown(f"### Evidence boundary\\n\\n{rendered}")\n\n\n'''
+          addition = '''def stage_banner(\n    stage: str,\n    title: str,\n    *,\n    objective: str,\n    deliverable: str,\n) -> None:\n    """Render a uniform Grand Challenge stage boundary."""\n\n    _display_markdown(\n        f"---\\n\\n## Stage {stage} — {title}\\n\\n"\n        f"**Objective.** {objective}\\n\\n"\n        f"**Deliverable.** {deliverable}\\n\\n---"\n    )\n\n\n'''
+          if 'def stage_banner(' not in text:
+              if anchor not in text:
+                  raise SystemExit('notebook.py stage-banner anchor not found')
+              text = text.replace(anchor, anchor + addition, 1)
+              notebook_module.write_text(text, encoding='utf-8')
+
+          support = ROOT / 'src/cps/pythia/notebook_support.py'
+          support.write_text('''from __future__ import annotations\n\nimport json\nimport shutil\nfrom dataclasses import dataclass, replace\nfrom pathlib import Path\nfrom typing import Iterable\n\nimport numpy as np\n\nfrom .config import load_probe_config\nfrom .planner import PlannerRecommendation\nfrom .runner import run_probe\n\n\n@dataclass(frozen=True)\nclass EvidencePacket:\n    root: Path\n    reduced_operator_path: Path\n    matrix: np.ndarray\n    couplings_path: Path | None\n    manifest_path: Path | None\n\n\ndef build_probe_for_notebook(\n    *,\n    revision: str | None = None,\n    run_name: str,\n    root: str = "/content/cps-artifacts",\n    config_path: str = "subjects/pythia/configs/pythia_70m_smoke.yaml",\n):\n    """Build the compact, robust probe used by self-contained release notebooks."""\n\n    config = load_probe_config(config_path)\n    if revision is not None:\n        config = replace(config, model=replace(config.model, revision=revision))\n    return replace(\n        config,\n        jacobian=replace(config.jacobian, mode="finite_difference"),\n        output=replace(config.output, root=root, run_name=run_name),\n    )\n\n\ndef run_self_contained_probe(\n    *,\n    revision: str | None = None,\n    run_name: str,\n    root: str = "/content/cps-artifacts",\n) -> Path:\n    config = build_probe_for_notebook(revision=revision, run_name=run_name, root=root)\n    return run_probe(config)\n\n\ndef load_evidence_packet(path: str | Path) -> EvidencePacket:\n    candidate = Path(path).expanduser()\n    if candidate.is_file() and candidate.suffix.lower() == ".zip":\n        destination = Path("/content/cps-import") / candidate.stem.replace(" ", "-")\n        destination.mkdir(parents=True, exist_ok=True)\n        shutil.unpack_archive(str(candidate), str(destination), "zip")\n        candidate = destination\n    if candidate.is_file():\n        if candidate.name != "reduced_operator.npy":\n            raise FileNotFoundError(\n                f"expected reduced_operator.npy, a ZIP archive, or an evidence directory; got {candidate}"\n            )\n        root = candidate.parent\n    else:\n        root = candidate\n    if not root.exists():\n        raise FileNotFoundError(f"evidence path does not exist: {root}")\n    operator = root / "reduced_operator.npy"\n    if not operator.is_file():\n        matches = sorted(root.rglob("reduced_operator.npy"))\n        if len(matches) != 1:\n            raise FileNotFoundError(\n                f"could not resolve a unique reduced_operator.npy under {root}; found {len(matches)}"\n            )\n        operator = matches[0]\n        root = operator.parent\n    couplings = root / "couplings.json"\n    manifest = root / "manifest.json"\n    return EvidencePacket(\n        root=root,\n        reduced_operator_path=operator,\n        matrix=np.load(operator),\n        couplings_path=couplings if couplings.is_file() else None,\n        manifest_path=manifest if manifest.is_file() else None,\n    )\n\n\ndef select_candidate_edges(packet: EvidencePacket, maximum: int = 8) -> list[tuple[int, int]]:\n    if maximum < 1:\n        raise ValueError("maximum must be positive")\n    if packet.couplings_path is not None:\n        records = json.loads(packet.couplings_path.read_text(encoding="utf-8"))\n        if records:\n            return [\n                (int(record["row"]), int(record["col"]))\n                for record in records[:maximum]\n            ]\n    magnitude = np.abs(packet.matrix).copy()\n    np.fill_diagonal(magnitude, 0.0)\n    flat = np.argsort(magnitude.ravel())[::-1]\n    edges: list[tuple[int, int]] = []\n    for index in flat:\n        row, col = np.unravel_index(index, magnitude.shape)\n        if magnitude[row, col] <= 0:\n            break\n        edges.append((int(row), int(col)))\n        if len(edges) >= maximum:\n            break\n    return edges\n\n\ndef write_planner_recommendation(\n    root: str | Path,\n    recommendation: PlannerRecommendation,\n    *,\n    selected_edges: Iterable[tuple[int, int]],\n    candidate_grid: Iterable[float],\n    control_operationalization: dict[str, object],\n) -> Path:\n    root = Path(root)\n    root.mkdir(parents=True, exist_ok=True)\n    target = root / "planner_recommendation.json"\n    payload = recommendation.to_dict()\n    payload["selected_edges"] = [list(edge) for edge in selected_edges]\n    payload["candidate_grid"] = [float(value) for value in candidate_grid]\n    payload["control_operationalization"] = control_operationalization\n    target.write_text(json.dumps(payload, indent=2), encoding="utf-8")\n    return target\n\n\n__all__ = [\n    "EvidencePacket",\n    "build_probe_for_notebook",\n    "load_evidence_packet",\n    "run_self_contained_probe",\n    "select_candidate_edges",\n    "write_planner_recommendation",\n]\n''', encoding='utf-8')
+
+          (ROOT / 'tests/pythia/test_notebook_support.py').write_text('''import json\nfrom pathlib import Path\n\nimport numpy as np\n\nfrom cps.pythia.notebook_support import (\n    build_probe_for_notebook,\n    load_evidence_packet,\n    select_candidate_edges,\n    write_planner_recommendation,\n)\nfrom cps.pythia.planner import PlannerRecommendation\n\n\ndef test_release_probe_contract_is_compact_and_self_contained():\n    config = build_probe_for_notebook(revision="step0", run_name="release-test")\n    assert config.model.revision == "step0"\n    assert config.jacobian.mode == "finite_difference"\n    assert config.output.run_name == "release-test"\n\n\ndef test_load_packet_and_prefer_declared_couplings(tmp_path: Path):\n    root = tmp_path / "packet"\n    root.mkdir()\n    matrix = np.array([[1.0, 0.7], [0.2, 0.9]])\n    np.save(root / "reduced_operator.npy", matrix)\n    (root / "couplings.json").write_text(\n        json.dumps([{"row": 1, "col": 0}, {"row": 0, "col": 1}]),\n        encoding="utf-8",\n    )\n    packet = load_evidence_packet(root)\n    assert np.allclose(packet.matrix, matrix)\n    assert select_candidate_edges(packet, maximum=2) == [(1, 0), (0, 1)]\n\n\ndef test_write_planner_recommendation(tmp_path: Path):\n    recommendation = PlannerRecommendation(\n        control="learning_rate_scale",\n        baseline=1.0,\n        recommended=0.9,\n        baseline_risk=1.2,\n        recommended_risk=1.0,\n        rationale="test",\n    )\n    target = write_planner_recommendation(\n        tmp_path,\n        recommendation,\n        selected_edges=[(0, 1)],\n        candidate_grid=[1.0, 0.9],\n        control_operationalization={"translation": "gamma = 1 - scale"},\n    )\n    payload = json.loads(target.read_text(encoding="utf-8"))\n    assert payload["recommended"] == 0.9\n    assert payload["selected_edges"] == [[0, 1]]\n''', encoding='utf-8')
+
+          (ROOT / 'tests/test_notebook_release_style.py').write_text('''from pathlib import Path\n\nimport nbformat\n\n\ndef notebook_text(path: Path) -> str:\n    notebook = nbformat.read(path, as_version=4)\n    return "\\n".join(cell.source for cell in notebook.cells)\n\n\ndef test_all_notebooks_are_release_grade_and_export_consistently():\n    paths = sorted(Path("notebooks").glob("*.ipynb"))\n    assert len(paths) == 7\n    for path in paths:\n        text = notebook_text(path)\n        assert "Grand Challenge release notebook" in text\n        assert "## Release contract" in text\n        assert "## Interpretation checklist" in text\n        assert "stage_banner(" in text\n        assert "archive = export_artifacts()" in text\n        assert "/content/cps-export.zip" in text\n\n\ndef test_planning_and_continuation_are_self_contained():\n    planning = notebook_text(Path("notebooks/05_cps_planning.ipynb"))\n    continuation = notebook_text(Path("notebooks/06_matched_continuation.ipynb"))\n    assert "run_self_contained_probe" in planning\n    assert "CPS_EVIDENCE_PATH" in planning\n    assert "run_self_contained_probe" in continuation\n    assert "plan_scalar_control" in continuation\n    assert "recommendation.recommended" in continuation\n''', encoding='utf-8')
+
+          pyproject = ROOT / 'pyproject.toml'
+          project = pyproject.read_text(encoding='utf-8')
+          if 'version = "0.2.13"' not in project:
+              raise SystemExit('expected CPS version 0.2.13')
+          pyproject.write_text(project.replace('version = "0.2.13"', 'version = "0.2.14"', 1), encoding='utf-8')
+          PY
+      - name: Commit implementation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add notebooks src/cps/notebook.py src/cps/pythia/notebook_support.py tests/pythia/test_notebook_support.py tests/test_notebook_release_style.py pyproject.toml
+          git commit -m 'Prepare release-grade self-contained Colab notebooks'
+          git push origin HEAD:release/colab-notebook-pedagogy
+      - name: Validate transformed suite
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev,notebooks]'
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install pandas
+          pytest -q
+          python scripts/validate_notebooks.py
+          python -m compileall -q src scripts tests
+          python -m build
