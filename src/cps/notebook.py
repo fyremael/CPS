@@ -10,6 +10,8 @@ from typing import Any, Iterable
 
 from .plot_labels import compact_basis_labels
 
+_THEME_APPLIED = False
+
 
 def _display_markdown(text: str) -> None:
     try:
@@ -29,9 +31,12 @@ def _display_html(text: str) -> None:
         print(text)
 
 
-def apply_release_theme() -> None:
+def apply_release_theme(*, force: bool = False) -> None:
     """Install the restrained visual language used by CPS release notebooks."""
 
+    global _THEME_APPLIED
+    if _THEME_APPLIED and not force:
+        return
     _display_html(
         """
 <style>
@@ -90,6 +95,7 @@ def apply_release_theme() -> None:
 </style>
         """
     )
+    _THEME_APPLIED = True
 
 
 def lesson(title: str, body: str) -> None:
@@ -112,16 +118,17 @@ def stage_banner(
 ) -> None:
     """Render a uniform Grand Challenge stage boundary."""
 
+    apply_release_theme()
     _display_html(
-        "<section class="cps-stage">"
-        f"<div class="cps-stage__index">Stage {html.escape(str(stage))}</div>"
-        f"<div class="cps-stage__title">{html.escape(title)}</div>"
-        "<div class="cps-stage__grid">"
-        "<div class="cps-stage__label">Objective</div>"
-        f"<div class="cps-stage__value">{html.escape(objective)}</div>"
-        "<div class="cps-stage__label">Evidence produced</div>"
-        f"<div class="cps-stage__value">{html.escape(deliverable)}</div>"
-        "</div></section>"
+        '<section class="cps-stage">'
+        f'<div class="cps-stage__index">Stage {html.escape(str(stage))}</div>'
+        f'<div class="cps-stage__title">{html.escape(title)}</div>'
+        '<div class="cps-stage__grid">'
+        '<div class="cps-stage__label">Objective</div>'
+        f'<div class="cps-stage__value">{html.escape(objective)}</div>'
+        '<div class="cps-stage__label">Evidence produced</div>'
+        f'<div class="cps-stage__value">{html.escape(deliverable)}</div>'
+        '</div></section>'
     )
 
 
@@ -248,10 +255,7 @@ def display_probe_summary(root: str | Path, *, top_n: int = 8) -> dict[str, Any]
 
     figure_width = max(6.5, 1.15 * len(labels) + 2.0)
     figure_height = max(4.8, 0.9 * len(labels) + 1.5)
-    figure, axis = plt.subplots(
-        figsize=(figure_width, figure_height),
-        constrained_layout=True,
-    )
+    figure, axis = plt.subplots(figsize=(figure_width, figure_height), constrained_layout=True)
     image = axis.imshow(np.abs(matrix))
     title = "Magnitude of the projected optimizer-state Jacobian"
     if shared_block is not None:
@@ -261,12 +265,7 @@ def display_probe_summary(root: str | Path, *, top_n: int = 8) -> dict[str, Any]
     axis.set_ylabel("target basis mode")
     rotation = 0 if max((len(label) for label in labels), default=0) <= 14 else 30
     horizontal_alignment = "center" if rotation == 0 else "right"
-    axis.set_xticks(
-        range(len(labels)),
-        labels,
-        rotation=rotation,
-        ha=horizontal_alignment,
-    )
+    axis.set_xticks(range(len(labels)), labels, rotation=rotation, ha=horizontal_alignment)
     axis.set_yticks(range(len(labels)), labels)
     axis.tick_params(axis="both", labelsize=9)
     figure.colorbar(image, ax=axis, label="|Âᵢⱼ|")
