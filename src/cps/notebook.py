@@ -30,6 +30,22 @@ def evidence_boundary(*items: str) -> None:
     _display_markdown(f"### Evidence boundary\n\n{rendered}")
 
 
+def stage_banner(
+    stage: str,
+    title: str,
+    *,
+    objective: str,
+    deliverable: str,
+) -> None:
+    """Render a uniform Grand Challenge stage boundary."""
+
+    _display_markdown(
+        f"---\n\n## Stage {stage} — {title}\n\n"
+        f"**Objective.** {objective}\n\n"
+        f"**Deliverable.** {deliverable}\n\n---"
+    )
+
+
 def show_environment() -> dict[str, Any]:
     import numpy as np
 

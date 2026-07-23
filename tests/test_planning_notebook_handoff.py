@@ -7,23 +7,31 @@ def _planning_notebook() -> dict:
     return json.loads((root / "notebooks" / "05_cps_planning.ipynb").read_text())
 
 
-def test_planning_notebook_does_not_assume_shared_colab_runtime():
+def _notebook_source() -> str:
     notebook = _planning_notebook()
-    cell = next(cell for cell in notebook["cells"] if cell.get("id") == "acf0dbef")
-    source = "".join(cell["source"])
+    return "\n".join("".join(cell.get("source", [])) for cell in notebook["cells"])
 
+
+def test_planning_notebook_is_self_contained_by_default():
+    source = _notebook_source()
+
+    assert "run_self_contained_probe" in source
     assert "CPS_EVIDENCE_PATH" in source
-    assert "files.upload()" in source
-    assert "cps-export*.zip" in source
-    assert "shutil.unpack_archive" in source
-    assert "/content/CPS/cps-artifacts" in source
-    assert "/content/drive/MyDrive/cps-artifacts" in source
-    assert "max(paths, key=packet_rank)" in source
+    assert "No external evidence" not in source
+    assert "Run a probe notebook first" not in source
 
 
-def test_planning_notebook_exports_the_selected_packet_with_recommendation():
-    notebook = _planning_notebook()
-    cell = next(cell for cell in notebook["cells"] if cell.get("id") == "e6ff75bd")
-    source = "".join(cell["source"])
+def test_planning_notebook_preserves_optional_cross_runtime_reuse():
+    source = _notebook_source()
 
-    assert "export_artifacts(sources=(path.parent,))" in source
+    assert "load_evidence_packet" in source
+    assert "ZIP archive" in source
+    assert "Reusing explicit evidence" in source
+
+
+def test_planning_notebook_exports_measurement_and_recommendation():
+    source = _notebook_source()
+
+    assert "planner_recommendation.json" in source
+    assert "archive = export_artifacts()" in source
+    assert "/content/cps-export.zip" in source
