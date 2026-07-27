@@ -8,6 +8,7 @@ from typing import Callable, Sequence
 import numpy as np
 
 from cps.families import singular_channel_family, sweep_matrix_family
+from cps.subspace_stability import summarize_singular_subspace_sweep
 
 from .basis import BasisVector
 
@@ -21,6 +22,7 @@ class CouplingRecord:
     magnitude: float
     metrics: dict[str, float]
     family_metadata: dict[str, object]
+    subspace_stability: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -66,6 +68,14 @@ def analyze_reduced_operator(
             compute_kreiss=compute_kreiss,
             metadata=metadata,
         )
+        stability = (
+            summarize_singular_subspace_sweep(sweep.matrices, rank=1)
+            if min(matrix.shape) > 1
+            else {
+                "status": "unavailable",
+                "reason": "matrix_dimension_below_two",
+            }
+        )
         record = CouplingRecord(
             row=row,
             col=col,
@@ -74,6 +84,7 @@ def analyze_reduced_operator(
             magnitude=float(abs(matrix[row, col])),
             metrics=sweep.metrics.to_dict(),
             family_metadata=metadata,
+            subspace_stability=stability,
         )
         records.append(record)
         if progress is not None:
