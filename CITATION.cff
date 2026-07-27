@@ -4,7 +4,7 @@ message: "Please cite the accompanying preprint when using this software."
 type: software
 authors:
   - name: "Grand Challenge Labs"
-version: 0.2.0
-date-released: 2026-07-21
+version: 0.2.16
+date-released: 2026-07-27
 repository-code: "https://github.com/fyremael/CPS"
 license: MIT
