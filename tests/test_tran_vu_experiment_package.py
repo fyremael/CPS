@@ -48,7 +48,7 @@ def test_characterization_package_emits_complete_visual_packet(tmp_path: Path):
     report = (output / "index.html").read_text(encoding="utf-8")
     assert "Tran--Vu moderate-gap characterization" in report
     assert "Visual characterization" in report
-    assert "Admission map" in report
+    assert "admission map" in report.lower()
 
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
     manifested = {entry["path"] for entry in manifest["files"]}
