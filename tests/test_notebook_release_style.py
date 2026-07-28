@@ -10,7 +10,7 @@ def notebook_text(path: Path) -> str:
 
 def test_all_notebooks_are_release_grade_and_export_consistently():
     paths = sorted(Path("notebooks").glob("*.ipynb"))
-    assert len(paths) == 7
+    assert len(paths) == 8
     for path in paths:
         text = notebook_text(path)
         assert "Grand Challenge Labs · Coupling-Phase Spectroscopy" in text
@@ -30,6 +30,15 @@ def test_planning_and_continuation_are_self_contained():
     assert "run_self_contained_probe" in continuation
     assert "plan_scalar_control" in continuation
     assert "recommendation.recommended" in continuation
+
+
+def test_tran_vu_characterization_is_self_contained_and_visual():
+    characterization = notebook_text(Path("notebooks/07_tran_vu_characterization.ipynb"))
+    assert "run_characterization" in characterization
+    assert "all nine plots" in characterization
+    assert "figures" in characterization
+    assert "index.html" in characterization
+    assert "acceptance[\"passed\"]" in characterization
 
 
 def test_release_titles_are_numbered_and_concise():
