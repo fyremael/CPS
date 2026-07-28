@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "package": "tran_vu_characterization",
+  "required_regimes": [
+    "weak_directional_coupling",
+    "classical_sharper_large_gap",
+    "valid_but_vacuous",
+    "gap_failure",
+    "signal_scale_failure",
+    "strong_local_coupling",
+    "high_halving_rank_penalty",
+    "complex_realification",
+    "nonnormal_singular_stability",
+    "rank_two_cluster"
+  ],
+  "required_figures": [
+    "01_regime_bound_comparison",
+    "02_directional_coupling_sweep",
+    "03_gap_sweep",
+    "04_perturbation_sweep",
+    "05_halving_rank_penalty",
+    "06_admission_map",
+    "07_observed_vs_bounds",
+    "08_nonnormality_separation",
+    "09_realification_validation"
+  ],
+  "gates": {
+    "all_fixture_expectations_match": true,
+    "all_applicable_tran_vu_bounds_cover_observed": true,
+    "all_admitted_results_are_informative_and_sharper": true,
+    "all_required_regimes_present": true,
+    "all_required_figures_present": true,
+    "realification_operator_norm_relative_error_max": 1e-10,
+    "realification_singular_duplication_relative_error_max": 1e-10,
+    "minimum_png_count": 9,
+    "minimum_svg_count": 9,
+    "html_report_required": true
+  }
+}
