@@ -28,7 +28,18 @@ jobs:
           python -m pip install --quiet torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install --quiet pandas
       - name: Unit tests
-        run: pytest -q
+        id: unit-tests
+        shell: bash
+        run: |
+          set -o pipefail
+          pytest -q 2>&1 | tee pytest-${{ matrix.python-version }}.log
+      - name: Upload pytest failure log
+        if: failure() && steps.unit-tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-${{ matrix.python-version }}-failure
+          path: pytest-${{ matrix.python-version }}.log
+          retention-days: 7
       - name: Validate notebooks and syntax
         run: |
           python scripts/validate_notebooks.py
