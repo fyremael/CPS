@@ -42,12 +42,17 @@ dev = [
 [project.scripts]
 cps-analyze = "cps.cli:main"
 cps-pythia = "cps.pythia.cli:main"
+cps-tran-vu = "experiments.tran_vu.run:main"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = {"cps" = "src/cps"}
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "."]
+include = ["cps*", "experiments*"]
+
+[tool.setuptools.package-data]
+"experiments.tran_vu" = ["acceptance.json"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
