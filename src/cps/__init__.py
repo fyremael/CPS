@@ -22,15 +22,24 @@ from .perturbations import (
 )
 from .projection import arnoldi_projection, project_dense_operator, randomized_projection
 from .spectra import SweepResult, spectral_sweep
+from .subspace_stability import (
+    SubspaceStabilityCertificate,
+    leading_eigenspace_stability,
+    leading_singular_subspace_stability,
+    summarize_singular_subspace_sweep,
+)
 
 __all__ = [
     "CPSMetrics",
+    "SubspaceStabilityCertificate",
     "SweepResult",
     "arnoldi_projection",
     "compute_cps_metrics",
     "eigenvalue_condition_numbers",
     "finite_horizon_gain",
     "kreiss_surrogate",
+    "leading_eigenspace_stability",
+    "leading_singular_subspace_stability",
     "minimum_eigenvalue_gap",
     "phase_moment_spectrum",
     "phase_rotate_entry",
@@ -40,5 +49,6 @@ __all__ = [
     "real_pair_rotation",
     "rotate_block_svd_phase",
     "spectral_sweep",
+    "summarize_singular_subspace_sweep",
     "trace_moment",
 ]

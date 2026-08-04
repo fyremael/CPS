@@ -22,7 +22,7 @@ CPS never materializes the full Jacobian. It selects dimensionless optimizer coo
 \widehat J_t=Q_t^*J_tQ_t.
 \]
 
-For a reduced coupling or singular channel, CPS preserves its magnitude and rotates its phase. It then records spectral migration, finite-horizon gain, minimum mode separation, eigenvalue conditioning, loop geometry, and projection closure residuals.
+For a reduced coupling or singular channel, CPS preserves its magnitude and rotates its phase. It then records spectral migration, finite-horizon gain, minimum mode separation, eigenvalue conditioning, loop geometry, projection closure residuals, and theorem-gated singular-subspace stability certificates.
 
 ## Pythia programme
 
@@ -85,17 +85,33 @@ The official Google Colab CLI can provision accelerators and execute notebooks d
 
 The wrapper always exports the Colab execution log, retrieves `/content/cps-export`, and tears down the runtime.
 
-
 ## Notebook pedagogy and live execution
 
 > **Colab import bootstrap.** The notebooks add `/content/CPS/src` to the live kernel path after installation. This is required because a newly created editable-install `.pth` file is not reprocessed automatically by an already-running kernel. No runtime restart is required. The bootstrap prints the resolved `cps.__file__`; subsequent cells should be run only after that confirmation appears.
 
+The eight Colab notebooks are written as executable lessons rather than opaque launchers. They show the resolved configuration, runtime inventory, evidence boundary, active attention and JVP backends where applicable, progress, result tables, diagnostic figures, acceptance status, and artifact locations. The same line-oriented progress stream is preserved by `colab-cli log`, making long remote runs auditable while they execute.
 
-The seven Colab notebooks are written as executable lessons rather than opaque launchers. They show the resolved configuration, runtime inventory, evidence boundary, active attention and JVP backends, per-column projection progress, coupling-sweep progress, result tables, diagnostic figures, and artifact locations. The same line-oriented progress stream is preserved by `colab-cli log`, making long remote runs auditable while they execute.
-
-The Pythia-70M notebook also explains the fused-SDPA forward-AD limitation and displays whether the run used exact `torch.func.jvp` or the declared centered finite-difference fallback.
+The Pythia-70M notebook explains the fused-SDPA forward-AD limitation and displays whether the run used exact `torch.func.jvp` or the declared centered finite-difference fallback. The Tran–Vu notebook runs the complete synthetic characterization package, displays all nine governed figures, and emits a standalone HTML report.
 
 The editorial, visual, self-containment, and export requirements are specified in [`docs/NOTEBOOK_RELEASE_STYLE.md`](docs/NOTEBOOK_RELEASE_STYLE.md).
+
+## Tran–Vu moderate-gap characterization
+
+CPS includes a self-contained experimental package for characterizing the new subspace-stability certificate rather than merely unit-testing it:
+
+```bash
+python -m experiments.tran_vu.run
+```
+
+A reduced deterministic development run is available with:
+
+```bash
+python -m experiments.tran_vu.run --quick
+```
+
+The package covers ten governed regimes and systematic sweeps over directional coupling, gap-to-noise ratio, perturbation-to-gap ratio, halving rank, complex realification, and non-normality. A successful run writes CSV and JSON datasets, nine PNG/SVG figure pairs, acceptance records, SHA-256 manifests, and a standalone visual report to `artifacts/tran_vu_characterization/index.html`.
+
+See [`experiments/tran_vu/README.md`](experiments/tran_vu/README.md) for the regime matrix, acceptance gates, output schema, and interpretation boundaries.
 
 ## Native optimizer states
 
@@ -128,7 +144,7 @@ Each probe writes an immutable evidence packet:
 manifest.json          configuration, environment, checkpoint and evidence class
 reduced_operator.npy   projected dimensionless optimizer-state Jacobian
 basis.json             semantic direction registry
-couplings.json         ranked CPS measurements
+couplings.json         ranked CPS measurements and subspace certificates
 ```
 
 Aggregate a campaign:
@@ -168,16 +184,16 @@ src/cps/pythia/          functional optimizer map and Pythia subject adapter
 subjects/pythia/         governed registries and experiment configurations
 notebooks/               Colab-executable runner harnesses
 scripts/colab/           official Colab CLI lifecycle wrappers
-experiments/             synthetic validation and figure generation
+experiments/             synthetic validation, characterization and figures
 manuscript/              preprint source and reproducible build
 scripts/                 notebook and repository validation
-tests/                    core, optimizer-map, native-state and subject tests
+tests/                    core, experiment, optimizer-map, native-state and subject tests
 docs/                     programme contracts, metrics, run matrix and ADRs
 ```
 
 ## Evidence discipline
 
-CPS is falsifiable. It must add held-out predictive value beyond gradient norms, loss trends, Hessian or generalized curvature estimates, nominal spectral radius, and nominal finite-horizon gain. A sophisticated phase sweep that does not improve prediction or intervention outcomes remains a research visualization, not an optimizer controller.
+CPS is falsifiable. It must add held-out predictive value beyond gradient norms, loss trends, Hessian or generalized curvature estimates, nominal spectral radius, and nominal finite-horizon gain. A sophisticated phase sweep or theorem-backed synthetic certificate that does not improve prediction or intervention outcomes remains a research instrument, not an optimizer controller.
 
 ## Safety and resource controls
 

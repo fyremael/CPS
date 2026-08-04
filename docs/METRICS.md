@@ -99,3 +99,62 @@ Every result table must include:
 - strongest baseline;
 - intervention cost;
 - negative or null results.
+
+## 7. Subspace-stability certificates
+
+CPS compares the leading singular spaces of a nominal reduced operator \(A\) and a perturbed operator \(\widetilde A=A+E\). Singular spaces, rather than right eigenvectors, are the certified object because the reduced optimizer-state Jacobian is generally non-normal.
+
+For target rank \(p\), let
+
+\[
+\delta_p=\sigma_p-\sigma_{p+1},
+\qquad
+B_{\mathrm{DK}}=\pi\frac{\|E\|_2}{\delta_p}.
+\]
+
+The Tran--Vu moderate-gap certificate uses the smallest \(r\geq p\) satisfying
+
+\[
+\frac{\sigma_p}{2}\leq |\sigma_p-\sigma_{r+1}|
+\]
+
+and the directional coupling
+
+\[
+x=\max_{1\leq i,j\leq r}|u_i^\top E v_j|.
+\]
+
+Under
+
+\[
+4\|E\|_2\leq\delta_p\leq\frac{\sigma_p}{4},
+\]
+
+Theorem 2.3 of Tran and Vu, *Davis--Kahan Theorem under a Moderate Gap Condition* (arXiv:2510.22393), gives
+
+\[
+B_{\mathrm{TV}}
+=24\sqrt{2}\left[
+\frac{\|E\|_2}{\sigma_p}
+\log\!\left(\frac{6\sigma_1}{\delta_p}\right)
++\frac{r^2x}{\delta_p}
+\right].
+\]
+
+Each coupling record reports the observed left/right projector displacement, both bounds, the theorem hypotheses, the halving rank, the directional coupling, and explicit failure reasons. CPS marks a Tran--Vu certificate `admitted` only when the hypotheses hold, \(B_{\mathrm{TV}}<1\), and \(B_{\mathrm{TV}}<B_{\mathrm{DK}}\). This admission rule is a reporting policy, not an additional theorem hypothesis.
+
+Complex phase-sweep matrices are mapped to the real block representation
+
+\[
+\mathcal R(A)=
+\begin{bmatrix}
+\operatorname{Re}A&-\operatorname{Im}A\\
+\operatorname{Im}A&\operatorname{Re}A
+\end{bmatrix},
+\]
+
+which preserves the operator norm and duplicates singular values. The certificate therefore records `representation: complex_realification` and doubles the working target rank. Numerically duplicate endpoints, such as both \(0\) and \(2\pi\), are excluded from admission counts.
+
+The directional coupling \(x\) is computed directly from the measured matrices. Sample splitting is required only when a later statistical claim treats small \(x\) as evidence of independence or random-noise decorrelation; it is not required for the deterministic certificate itself.
+
+This certificate does not control non-normal eigenvector motion, pseudospectral amplification, or projection closure. Those remain separate CPS diagnostics.

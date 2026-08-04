@@ -25,7 +25,24 @@ Each entry contains a stable index, human-readable name, original parameter name
 
 ## `couplings.json`
 
-Each record declares source and target basis coordinates, nominal coupling magnitude, perturbation-family metadata, and the complete CPS metric vector.
+Each record declares source and target basis coordinates, nominal coupling magnitude, perturbation-family metadata, the complete CPS metric vector, and a `subspace_stability` object.
+
+The `subspace_stability` object summarizes leading singular-space comparisons between the nominal phase and nontrivial samples in the coupling sweep. It contains:
+
+- theorem and target identifiers;
+- requested and working ranks;
+- real or complex-realification representation;
+- comparison and skipped-endpoint counts;
+- theorem-applicable, improved, and admitted counts;
+- observed projector displacement;
+- classical Davis--Kahan and Tran--Vu bounds;
+- the best Tran--Vu-to-Davis--Kahan ratio;
+- explicit failure-reason counts;
+- the most informative applicable comparison and its complete certificate.
+
+A complete certificate includes the perturbation norm, target gap, signal singular value, spectral scale, halving rank, directional coupling, directional-coupling ratio, observed left/right projector distances, theorem hypothesis flags, admission flags, and failure reasons.
+
+`admitted` means only that the Tran--Vu hypotheses hold and that its bound is both below one and sharper than the classical bound. It is not an empirical stability claim and does not replace projection-closure, pseudospectral, or finite-horizon diagnostics.
 
 ## Versioning
 
@@ -48,3 +65,5 @@ jacobian.preflight_norm
 ```
 
 These fields prevent an eager-forward-AD run and a centered finite-difference fallback from being pooled as though they measured the reduced operator by the same numerical method.
+
+`couplings.json` may add `subspace_stability` without changing the schema version because it is an additive field with no change to existing field meaning.
